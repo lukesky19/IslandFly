@@ -22,7 +22,11 @@ How many seconds the addon will wait before disabling fly mode when a player exi
 If the fly mode should be disabled when a player disconnect.
 
 ## Commands
-**/is fly** - This command toggles flight **On** and **Off** 
+**/is fly** - This command toggles flight **On** and **Off**
+**/is tempfly** - This command toggles temporary flight **On** and **Off**
+**/is flighttime** - This command can be used to retrieve your current temporary flight time.
+**/[gamemode] flighttime <set | add | remove> <player name> <time>** - This command can be used to **set**, **add**, or **remove** flight time for a player.
+**/[gamemode] flighttime <get | delete> <player name>** - This command can be used to **get** or **delete** flight time for a player.
 
 ## Permissions
 **[gamemode].island.fly** - For usage of flight command
