@@ -1,33 +1,25 @@
 package world.bentobox.islandfly.listeners;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 import java.util.Optional;
 import java.util.UUID;
 
-import org.bukkit.Bukkit;
-import org.bukkit.GameMode;
-import org.bukkit.Location;
-import org.bukkit.World;
+import org.bukkit.*;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitScheduler;
-import org.eclipse.jdt.annotation.Nullable;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.powermock.api.mockito.PowerMockito;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
+import org.mockito.MockedStatic;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import world.bentobox.bentobox.BentoBox;
 import world.bentobox.bentobox.api.addons.GameModeAddon;
@@ -36,17 +28,15 @@ import world.bentobox.bentobox.api.user.User;
 import world.bentobox.bentobox.database.objects.Island;
 import world.bentobox.bentobox.managers.IslandWorldManager;
 import world.bentobox.bentobox.managers.IslandsManager;
-import world.bentobox.bentobox.managers.LocalesManager;
-import world.bentobox.bentobox.managers.PlaceholdersManager;
 import world.bentobox.islandfly.IslandFlyAddon;
 import world.bentobox.islandfly.config.Settings;
+import world.bentobox.islandfly.managers.FlightTimeManager;
 
 /**
  * @author tastybento
  *
  */
-@RunWith(PowerMockRunner.class)
-@PrepareForTest({Bukkit.class, BentoBox.class})
+@ExtendWith(MockitoExtension.class)
 public class FlyListenerTest {
     @Mock
     private BentoBox plugin;
@@ -67,8 +57,6 @@ public class FlyListenerTest {
     @Mock
     private Player p;
     @Mock
-    private @Nullable Location location;
-    @Mock
     private IslandWorldManager iwm;
     @Mock
     private World world;
@@ -79,68 +67,34 @@ public class FlyListenerTest {
     private BukkitScheduler sch;
     @Mock
     private Settings settings;
+    @Mock
+    FlightTimeManager flightTimeManager;
 
-    /**
-     */
-    @Before
+    MockedStatic<User> mockedUserClass;
+    MockedStatic<Bukkit> mockedBukkitClass;
+
+    @BeforeEach
     public void setUp() {
-        // Island manager
-        when(addon.getIslands()).thenReturn(im);
-        Optional<Island> opIsland1 = Optional.of(island);
-        opIsland2 = Optional.of(island2);
-        when(im.getProtectedIslandAt(any())).thenReturn(opIsland1);
-        // Island
-        when(island.isAllowed(any(), any())).thenReturn(true);
-        when(island2.isAllowed(any(), any())).thenReturn(false);
         // User
         uuid = UUID.randomUUID();
         when(p.getUniqueId()).thenReturn(uuid);
-        when(p.isOnline()).thenReturn(true);
-        when(p.getLocation()).thenReturn(location);
-        when(p.getWorld()).thenReturn(world);
-        when(p.hasPermission(eq("bskyblock.island.fly"))).thenReturn(true);
-        when(p.isOp()).thenReturn(false);
-        when(p.isFlying()).thenReturn(true);
-        when(p.getGameMode()).thenReturn(GameMode.SURVIVAL);
         User.setPlugin(plugin);
         User.getInstance(p);
-        when(user.getUniqueId()).thenReturn(uuid);
-        when(user.getPlayer()).thenReturn(p);
-        when(user.isOnline()).thenReturn(true);
-        when(user.getLocation()).thenReturn(location);
-        when(user.getWorld()).thenReturn(world);
-        when(user.hasPermission(eq("bskyblock.island.fly"))).thenReturn(true);
-        // IWM
-        when(addon.getPlugin()).thenReturn(plugin);
-        when(plugin.getIWM()).thenReturn(iwm);
-        Optional<GameModeAddon> opGm = Optional.of(gameMode);
-        when(gameMode.getPermissionPrefix()).thenReturn("bskyblock.");
-        when(iwm.getAddon(any())).thenReturn(opGm);
-        when(iwm.getPermissionPrefix(any())).thenReturn("bskyblock.");
         // Bukkit
-        PowerMockito.mockStatic(Bukkit.class);
-        when(Bukkit.getScheduler()).thenReturn(sch);
-        // settings
-        when(settings.getFlyTimeout()).thenReturn(5);
-        when(addon.getSettings()).thenReturn(settings);
-        // Locales
-        LocalesManager lm = mock(LocalesManager.class);
-        when(lm.get(any(), any())).thenAnswer(invocation -> invocation.getArgument(1, String.class));
-        when(plugin.getLocalesManager()).thenReturn(lm);
-        PlaceholdersManager phm = mock(PlaceholdersManager.class);
-        when(phm.replacePlaceholders(any(), any())).thenAnswer(invocation -> invocation.getArgument(1, String.class));
-        // Placeholder manager
-        when(plugin.getPlaceholdersManager()).thenReturn(phm);
+        mockedBukkitClass = mockStatic(Bukkit.class);
+        mockedBukkitClass.when(Bukkit::getScheduler).thenReturn(sch);
+        // User
+        mockedUserClass = mockStatic(User.class);
+        mockedUserClass.when(() -> User.getInstance(uuid)).thenReturn(user);
 
-
-        fl = new FlyListener(addon);
+        fl = new FlyListener(addon, flightTimeManager);
     }
 
-    /**
-     */
-    @After
+    @AfterEach
     public void tearDown() {
         User.clearUsers();
+        mockedUserClass.close();
+        mockedBukkitClass.close();
     }
 
     /**
@@ -148,12 +102,34 @@ public class FlyListenerTest {
      */
     @Test
     public void testOnExitIslandGraceTime() {
-        when(im.getProtectedIslandAt(any())).thenReturn(Optional.empty());
+        // IWM
+        when(addon.getPlugin()).thenReturn(plugin);
+        when(plugin.getIWM()).thenReturn(iwm);
+        when(iwm.getPermissionPrefix(any())).thenReturn("bskyblock.");
+
+        when(p.getGameMode()).thenReturn(GameMode.SURVIVAL);
+
+        when(user.isOp()).thenReturn(false);
+        when(user.getPlayer()).thenReturn(p);
+        when(p.isFlying()).thenReturn(true);
+
+        when(user.hasPermission(anyString())).thenAnswer(invocation -> {
+            String permission = invocation.getArgument(0, String.class);
+            if(permission.equals("bskyblock.island.fly")
+                    || permission.equals("bskyblock.island.flyspawn")) {
+                return true;
+            }
+            return false;
+        });
+
+        when(settings.getFlyTimeout()).thenReturn(5);
+        when(addon.getSettings()).thenReturn(settings);
+
         IslandExitEvent event = mock(IslandExitEvent.class);
         when(event.getPlayerUUID()).thenReturn(uuid);
         fl.onExitIsland(event);
         verify(sch).runTaskLater(eq(plugin), any(Runnable.class), eq(100L));
-        verify(p).sendMessage("islandfly.fly-outside-alert");
+        verify(user).sendMessage("islandfly.fly-outside-alert", "[number]", "5");
     }
 
     /**
@@ -161,10 +137,19 @@ public class FlyListenerTest {
      */
     @Test
     public void testOnExitIslandGraceTimeOp() {
-        when(p.isOp()).thenReturn(true);
-        when(im.getProtectedIslandAt(any())).thenReturn(Optional.empty());
+        // IWM
+        when(addon.getPlugin()).thenReturn(plugin);
+        when(plugin.getIWM()).thenReturn(iwm);
+        when(iwm.getPermissionPrefix(any())).thenReturn("bskyblock.");
+
+        // User/Player
+        when(user.isOp()).thenReturn(true);
+
+        // IslandExitEvent
         IslandExitEvent event = mock(IslandExitEvent.class);
         when(event.getPlayerUUID()).thenReturn(uuid);
+
+        // Actual test
         fl.onExitIsland(event);
         verify(sch, never()).runTaskLater(eq(plugin), any(Runnable.class), any(Long.class));
         verify(p, never()).sendMessage(anyString());
@@ -175,10 +160,20 @@ public class FlyListenerTest {
      */
     @Test
     public void testOnExitIslandGraceTimePermission() {
-        when(p.hasPermission(eq("bskyblock.island.flybypass"))).thenReturn(true);
-        when(im.getProtectedIslandAt(any())).thenReturn(Optional.empty());
+        // IWM
+        when(addon.getPlugin()).thenReturn(plugin);
+        when(plugin.getIWM()).thenReturn(iwm);
+        when(iwm.getPermissionPrefix(any())).thenReturn("bskyblock.");
+
+        // User/Player
+        when(user.isOp()).thenReturn(false);
+        when(user.getPlayer()).thenReturn(p);
+        when(p.getGameMode()).thenReturn(GameMode.SURVIVAL);
+
+        // IslandExitEvent
         IslandExitEvent event = mock(IslandExitEvent.class);
         when(event.getPlayerUUID()).thenReturn(uuid);
+
         fl.onExitIsland(event);
         verify(sch, never()).runTaskLater(eq(plugin), any(Runnable.class), any(Long.class));
         verify(p, never()).sendMessage(anyString());
@@ -189,12 +184,37 @@ public class FlyListenerTest {
      */
     @Test
     public void testOnExitIslandGraceTimeNotFlying() {
-        when(user.hasPermission(eq("bskyblock.island.fly"))).thenReturn(true);
+        when(user.getPlayer()).thenReturn(p);
+
+        // IWM
+        when(addon.getPlugin()).thenReturn(plugin);
+        when(plugin.getIWM()).thenReturn(iwm);
+        when(iwm.getPermissionPrefix(any())).thenReturn("bskyblock.");
+
+        when(p.getGameMode()).thenReturn(GameMode.SURVIVAL);
+
+        when(user.isOp()).thenReturn(false);
+
+        when(user.hasPermission(anyString())).thenAnswer(invocation -> {
+            String permission = invocation.getArgument(0, String.class);
+            if(permission.equals("bskyblock.island.fly")
+                    || permission.equals("bskyblock.island.flyspawn")) {
+                return true;
+            }
+            return false;
+        });
+
+        when(addon.getSettings()).thenReturn(settings);
+        when(settings.getFlyTimeout()).thenReturn(5);
+
         when(p.isFlying()).thenReturn(false);
-        when(im.getProtectedIslandAt(any())).thenReturn(Optional.empty());
+        when(user.getWorld()).thenReturn(world);
+
         IslandExitEvent event = mock(IslandExitEvent.class);
         when(event.getPlayerUUID()).thenReturn(uuid);
         fl.onExitIsland(event);
+
+
         verify(sch).runTaskLater(eq(plugin), any(Runnable.class), eq(100L));
         verify(p, never()).sendMessage("islandfly.fly-outside-alert");
     }
@@ -204,25 +224,60 @@ public class FlyListenerTest {
      */
     @Test
     public void testOnExitIslandNoGraceTime() {
+        // IWM
+        when(addon.getPlugin()).thenReturn(plugin);
+        when(plugin.getIWM()).thenReturn(iwm);
+        when(iwm.getPermissionPrefix(any())).thenReturn("bskyblock.");
+
+        // Island
+        when(addon.getIslands()).thenReturn(im);
         when(im.getProtectedIslandAt(any())).thenReturn(Optional.empty());
+
+        // User/Player
+        when(user.isOnline()).thenReturn(true);
+        when(user.getPlayer()).thenReturn(p);
+        when(p.isFlying()).thenReturn(true);
+        when(p.getGameMode()).thenReturn(GameMode.SURVIVAL);
+        when(p.isFlying()).thenReturn(true);
+
+        when(user.hasPermission(anyString())).thenAnswer(invocation -> {
+            String permission = invocation.getArgument(0, String.class);
+            if(permission.equals("bskyblock.island.fly")
+                    || permission.equals("bskyblock.island.flyspawn")) {
+                return true;
+            }
+            return false;
+        });
+
+        when(addon.getSettings()).thenReturn(settings);
         when(settings.getFlyTimeout()).thenReturn(0);
+
         IslandExitEvent event = mock(IslandExitEvent.class);
         when(event.getPlayerUUID()).thenReturn(uuid);
+
+
         fl.onExitIsland(event);
         verify(sch, never()).runTaskLater(eq(plugin), any(Runnable.class), any(Long.class));
-        verify(p).sendMessage("islandfly.disable-fly");
+        verify(user).sendMessage("islandfly.disable-fly");
     }
 
     /**
      * Test method for {@link world.bentobox.islandfly.listeners.FlyListener#onExitIsland(world.bentobox.bentobox.api.events.island.IslandExitEvent)}.
      */
     @Test
-    public void testOnExitIslandNoGraceTimeNoPermission() {
-        when(p.hasPermission(eq("bskyblock.island.fly"))).thenReturn(false);
-        when(im.getProtectedIslandAt(any())).thenReturn(Optional.empty());
-        when(settings.getFlyTimeout()).thenReturn(0);
+    public void testOnExitIslandNoPermission() {
+        // IWM
+        when(addon.getPlugin()).thenReturn(plugin);
+        when(plugin.getIWM()).thenReturn(iwm);
+        when(iwm.getPermissionPrefix(any())).thenReturn("bskyblock.");
+
+        // User/Player
+        when(user.getPlayer()).thenReturn(p);
+        when(p.getGameMode()).thenReturn(GameMode.SURVIVAL);
+
         IslandExitEvent event = mock(IslandExitEvent.class);
         when(event.getPlayerUUID()).thenReturn(uuid);
+
         fl.onExitIsland(event);
         verify(sch, never()).runTaskLater(eq(plugin), any(Runnable.class), any(Long.class));
         verify(p, never()).sendMessage("islandfly.disable-fly");
@@ -233,9 +288,14 @@ public class FlyListenerTest {
      */
     @Test
     public void testOnExitIslandNoGraceTimeCreativeOrSpectator() {
+        // IWM
+        when(addon.getPlugin()).thenReturn(plugin);
+        when(plugin.getIWM()).thenReturn(iwm);
+        when(iwm.getPermissionPrefix(any())).thenReturn("bskyblock.");
+
+        when(user.getPlayer()).thenReturn(p);
         when(p.getGameMode()).thenReturn(GameMode.CREATIVE);
-        when(im.getProtectedIslandAt(any())).thenReturn(Optional.empty());
-        when(settings.getFlyTimeout()).thenReturn(0);
+
         IslandExitEvent event = mock(IslandExitEvent.class);
         when(event.getPlayerUUID()).thenReturn(uuid);
         fl.onExitIsland(event);
@@ -262,8 +322,16 @@ public class FlyListenerTest {
      */
     @Test
     public void testRemoveFlyUserFlyingOutsideProtectedIsland() {
+        // User/Player
+        when(user.isOnline()).thenReturn(true);
+        when(user.getPlayer()).thenReturn(p);
+        when(p.isFlying()).thenReturn(true);
+
+        // Island
         // If a player is flying outside an island into unowned space, then they should have their fly removed
+        when(addon.getIslands()).thenReturn(im);
         when(im.getProtectedIslandAt(any())).thenReturn(Optional.empty());
+
         assertTrue(fl.removeFly(user));
         verify(p).setFlying(false);
         verify(p).setAllowFlight(false);
@@ -283,7 +351,19 @@ public class FlyListenerTest {
      */
     @Test
     public void testRemoveFlyUserFlyingInOtherIslandNotAllowed() {
+        // Island
+        when(addon.getIslands()).thenReturn(im);
+        opIsland2 = Optional.of(island2);
         when(im.getProtectedIslandAt(any())).thenReturn(opIsland2);
+
+        // User/Player
+        when(user.getPlayer()).thenReturn(p);
+        when(user.isOnline()).thenReturn(true);
+        when(p.isFlying()).thenReturn(true);
+
+        // Settings
+        when(addon.getSettings()).thenReturn(settings);
+
         assertTrue(fl.removeFly(user));
         verify(p).setFlying(false);
         verify(p).setAllowFlight(false);
@@ -295,8 +375,18 @@ public class FlyListenerTest {
      */
     @Test
     public void testRemoveFlyUserFlyingInOtherProtectedIslandAllowed() {
-        when(island2.isAllowed(any(), any())).thenReturn(true);
+        // Island
+        when(addon.getIslands()).thenReturn(im);
+        opIsland2 = Optional.of(island2);
         when(im.getProtectedIslandAt(any())).thenReturn(opIsland2);
+        when(island2.isAllowed(any(), any())).thenReturn(true);
+
+        // Settings
+        when(addon.getSettings()).thenReturn(settings);
+
+        // User
+        when(user.isOnline()).thenReturn(true);
+
         assertFalse(fl.removeFly(user));
     }
 
@@ -305,7 +395,19 @@ public class FlyListenerTest {
      */
     @Test
     public void testRemoveFlyUserFlyingInOwnProtectedIslandNotAllowed() {
-        when(island.isAllowed(any(), any())).thenReturn(false);
+        // User/Player
+        when(user.isOnline()).thenReturn(true);
+        when(user.getPlayer()).thenReturn(p);
+        when(p.isFlying()).thenReturn(true);
+
+        // Island
+        when(addon.getIslands()).thenReturn(im);
+        Optional<Island> opIsland = Optional.of(island);
+        when(im.getProtectedIslandAt(any())).thenReturn(opIsland);
+
+        // Settings
+        when(addon.getSettings()).thenReturn(settings);
+
         assertTrue(fl.removeFly(user));
         verify(p).setFlying(false);
         verify(p).setAllowFlight(false);
@@ -318,8 +420,24 @@ public class FlyListenerTest {
      */
     @Test
     public void testRemoveFlyUserFlyingInSpawnAllowed() {
+        // IWM
+        when(addon.getPlugin()).thenReturn(plugin);
+        when(plugin.getIWM()).thenReturn(iwm);
+        Optional<GameModeAddon> opGm = Optional.of(gameMode);
+        when(gameMode.getPermissionPrefix()).thenReturn("bskyblock.");
+        when(iwm.getAddon(any())).thenReturn(opGm);
+
+        // User/Player
+        when(user.isOnline()).thenReturn(true);
         when(user.hasPermission(anyString())).thenReturn(true);
+
+        // Island
+        when(addon.getIslands()).thenReturn(im);
+        Optional<Island> opIsland = Optional.of(island);
+        when(im.getProtectedIslandAt(any())).thenReturn(opIsland);
         when(island.isSpawn()).thenReturn(true);
+
+
         assertFalse(fl.removeFly(user));
     }
 
@@ -328,7 +446,26 @@ public class FlyListenerTest {
      */
     @Test
     public void testRemoveFlyUserFlyingInSpawnNotAllowed() {
+        // IWM
+        when(addon.getPlugin()).thenReturn(plugin);
+        when(plugin.getIWM()).thenReturn(iwm);
+        Optional<GameModeAddon> opGm = Optional.of(gameMode);
+        when(gameMode.getPermissionPrefix()).thenReturn("bskyblock.");
+        when(iwm.getAddon(any())).thenReturn(opGm);
+
+        // Island
+        when(addon.getIslands()).thenReturn(im);
+        Optional<Island> opIsland = Optional.of(island);
+        when(im.getProtectedIslandAt(any())).thenReturn(opIsland);
         when(island.isSpawn()).thenReturn(true);
+
+        // User/Player
+        when(user.isOnline()).thenReturn(true);
+        when(user.hasPermission("bskyblock.island.flyspawn")).thenReturn(false);
+        when(user.getPlayer()).thenReturn(p);
+        when(p.isFlying()).thenReturn(true);
+
+
         assertTrue(fl.removeFly(user));
         verify(p).setFlying(false);
         verify(p).setAllowFlight(false);

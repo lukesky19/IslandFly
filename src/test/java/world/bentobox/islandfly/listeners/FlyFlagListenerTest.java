@@ -3,29 +3,24 @@ package world.bentobox.islandfly.listeners;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
 import org.bukkit.Bukkit;
-import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitScheduler;
 import org.eclipse.jdt.annotation.NonNull;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.stubbing.Answer;
-import org.powermock.api.mockito.PowerMockito;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
 
 import world.bentobox.bentobox.BentoBox;
 import world.bentobox.bentobox.api.events.flags.FlagProtectionChangeEvent;
@@ -36,13 +31,12 @@ import world.bentobox.bentobox.managers.LocalesManager;
 import world.bentobox.bentobox.managers.PlaceholdersManager;
 import world.bentobox.islandfly.IslandFlyAddon;
 import world.bentobox.islandfly.config.Settings;
+import world.bentobox.islandfly.managers.FlightTimeManager;
 
 /**
  * @author tastybento
- *
  */
-@RunWith(PowerMockRunner.class)
-@PrepareForTest({Bukkit.class, BentoBox.class})
+@ExtendWith(MockitoExtension.class)
 public class FlyFlagListenerTest {
     
     private FlyFlagListener ffl;
@@ -66,67 +60,36 @@ public class FlyFlagListenerTest {
     private Player op;
     @Mock
     private Island island;
+    @Mock
+    FlightTimeManager flightTimeManager;
 
-    /**
-     * @throws java.lang.Exception
-     */
-    @Before
-    public void setUp() throws Exception {
-        when(addon.getPlugin()).thenReturn(plugin);
-        // Locales
+    MockedStatic<Bukkit> mockedBukkitClass;
+
+    @BeforeEach
+    public void setUp() {
         User.setPlugin(plugin);
-        LocalesManager lm = mock(LocalesManager.class);
-        when(plugin.getLocalesManager()).thenReturn(lm);
-        when(lm.get(any(), anyString())).thenAnswer((Answer<String>) invocation -> invocation.getArgument(1, String.class));
-        PlaceholdersManager phm = mock(PlaceholdersManager.class);
-        when(plugin.getPlaceholdersManager()).thenReturn(phm);
-        when(phm.replacePlaceholders(any(), anyString())).thenAnswer((Answer<String>) invocation -> invocation.getArgument(1, String.class));
 
-        // Settings
-        when(settings.getFlyTimeout()).thenReturn(5);
-        when(addon.getSettings()).thenReturn(settings);
         // Bukkit
-        PowerMockito.mockStatic(Bukkit.class);
-        when(Bukkit.getScheduler()).thenReturn(scheduler);
+        mockedBukkitClass = mockStatic(Bukkit.class);
+        mockedBukkitClass.when(Bukkit::getScheduler).thenReturn(scheduler);
 
-        // Event
-        when(e.getEditedFlag()).thenReturn(IslandFlyAddon.ISLAND_FLY_PROTECTION);
-        when(e.getIsland()).thenReturn(island);
-        @NonNull
-        List<Player> list = new ArrayList<>();
+        // Players/Users
         when(p1.getUniqueId()).thenReturn(UUID.randomUUID());
         User.getInstance(p1);
-        when(p1.isFlying()).thenReturn(true);
-       when(p2.getUniqueId()).thenReturn(UUID.randomUUID());
+        when(p2.getUniqueId()).thenReturn(UUID.randomUUID());
         User.getInstance(p2);
-        when(p2.isFlying()).thenReturn(true);
-        when(p2.isOnline()).thenReturn(true);
-        when(p2.getLocation()).thenReturn(mock(Location.class));
-         when(p3.getUniqueId()).thenReturn(UUID.randomUUID());
+        when(p3.getUniqueId()).thenReturn(UUID.randomUUID());
         User.getInstance(p3);
-        when(p3.isFlying()).thenReturn(false);
         when(op.getUniqueId()).thenReturn(UUID.randomUUID());
         User.getInstance(op);
-        when(op.isFlying()).thenReturn(true);
-        when(op.isOp()).thenReturn(true);
-        list.add(p1);
-        list.add(p2);
-        list.add(p3);
-        list.add(op);
-        when(island.getPlayersOnIsland()).thenReturn(list);
-        // One player is allowed, others not
-        when(island.isAllowed(any(), any())).thenReturn(true, false);
-        when(island.onIsland(any())).thenReturn(true);
         
-        ffl = new FlyFlagListener(addon);
+        ffl = new FlyFlagListener(addon,flightTimeManager);
     }
 
-    /**
-     * @throws java.lang.Exception
-     */
-    @After
-    public void tearDown() throws Exception {
+    @AfterEach
+    public void tearDown() {
         User.clearUsers();
+        mockedBukkitClass.close();
     }
     
     /**
@@ -137,6 +100,7 @@ public class FlyFlagListenerTest {
         FlagProtectionChangeEvent e = mock(FlagProtectionChangeEvent.class);
         Flag flag = mock(Flag.class);
         when(e.getEditedFlag()).thenReturn(flag);
+
         ffl.onFlagChange(e);
         verify(e, never()).getIsland();
     }
@@ -146,6 +110,39 @@ public class FlyFlagListenerTest {
      */
     @Test
     public void testOnFlagChange() {
+        // Plugin
+        when(addon.getPlugin()).thenReturn(plugin);
+
+        // FlagProtectionChangeEvent
+        when(e.getEditedFlag()).thenReturn(IslandFlyAddon.ISLAND_FLY_PROTECTION);
+        when(e.getIsland()).thenReturn(island);
+
+        // List of Players
+        @NonNull
+        List<Player> list = new ArrayList<>();
+        list.add(p1);
+        list.add(p2);
+        list.add(p3);
+        list.add(op);
+        when(island.getPlayersOnIsland()).thenReturn(list);
+
+        // Player 2
+        when(p2.isFlying()).thenReturn(true);
+
+        // Settings
+        when(addon.getSettings()).thenReturn(settings);
+        when(settings.getFlyTimeout()).thenReturn(5);
+
+        // lm
+        LocalesManager lm = mock(LocalesManager.class);
+        when(plugin.getLocalesManager()).thenReturn(lm);
+        when(lm.get(any(), anyString())).thenAnswer((Answer<String>) invocation -> invocation.getArgument(1, String.class));
+
+        // phm
+        PlaceholdersManager phm = mock(PlaceholdersManager.class);
+        when(plugin.getPlaceholdersManager()).thenReturn(phm);
+        when(phm.replacePlaceholders(any(), anyString())).thenAnswer((Answer<String>) invocation -> invocation.getArgument(1, String.class));
+
         ffl.onFlagChange(e);
         verify(p1, never()).sendMessage(anyString());
         verify(p2).sendMessage(eq("islandfly.fly-turning-off-alert"));
@@ -159,7 +156,35 @@ public class FlyFlagListenerTest {
      */
     @Test
     public void testOnFlagChangeZeroTime() {
+        // FlagProtectionChangeEvent
+        when(e.getEditedFlag()).thenReturn(IslandFlyAddon.ISLAND_FLY_PROTECTION);
+        when(e.getIsland()).thenReturn(island);
+
+        // List of Players
+        @NonNull
+        List<Player> list = new ArrayList<>();
+        list.add(p1);
+        list.add(p2);
+        list.add(p3);
+        list.add(op);
+        when(island.getPlayersOnIsland()).thenReturn(list);
+
+        // Player 2
+        when(p2.isFlying()).thenReturn(true);
+
+        // Settings
+        when(addon.getSettings()).thenReturn(settings);
         when(settings.getFlyTimeout()).thenReturn(0);
+
+        // lm
+        LocalesManager lm = mock(LocalesManager.class);
+        when(plugin.getLocalesManager()).thenReturn(lm);
+        when(lm.get(any(), anyString())).thenAnswer((Answer<String>) invocation -> invocation.getArgument(1, String.class));
+        // phm
+        PlaceholdersManager phm = mock(PlaceholdersManager.class);
+        when(plugin.getPlaceholdersManager()).thenReturn(phm);
+        when(phm.replacePlaceholders(any(), anyString())).thenAnswer((Answer<String>) invocation -> invocation.getArgument(1, String.class));
+
         ffl.onFlagChange(e);
         verify(p1, never()).sendMessage(anyString());
         verify(p2).sendMessage(eq("islandfly.fly-turning-off-alert"));
@@ -169,7 +194,6 @@ public class FlyFlagListenerTest {
         verify(p2).setFlying(false);
         verify(p2).setAllowFlight(false);
         verify(p2).sendMessage("islandfly.disable-fly");
-        
     }
 
     /**
@@ -177,6 +201,17 @@ public class FlyFlagListenerTest {
      */
     @Test
     public void testDisableAllowedAgain() {
+        when(p2.isOnline()).thenReturn(true);
+
+        // lm
+        LocalesManager lm = mock(LocalesManager.class);
+        when(plugin.getLocalesManager()).thenReturn(lm);
+        when(lm.get(any(), anyString())).thenAnswer((Answer<String>) invocation -> invocation.getArgument(1, String.class));
+        // phm
+        PlaceholdersManager phm = mock(PlaceholdersManager.class);
+        when(plugin.getPlaceholdersManager()).thenReturn(phm);
+        when(phm.replacePlaceholders(any(), anyString())).thenAnswer((Answer<String>) invocation -> invocation.getArgument(1, String.class));
+
         when(island.isAllowed(any(), any())).thenReturn(true);
         ffl.disable(p2, User.getInstance(p2), island);
         verify(p2).sendMessage(eq("islandfly.reallowed-fly"));
@@ -187,7 +222,19 @@ public class FlyFlagListenerTest {
      */
     @Test
     public void testDisable() {
+        when(p2.isOnline()).thenReturn(true);
         when(island.isAllowed(any(), any())).thenReturn(false);
+        when(island.onIsland(p2.getLocation())).thenReturn(true);
+
+        // lm
+        LocalesManager lm = mock(LocalesManager.class);
+        when(plugin.getLocalesManager()).thenReturn(lm);
+        when(lm.get(any(), anyString())).thenAnswer((Answer<String>) invocation -> invocation.getArgument(1, String.class));
+        // phm
+        PlaceholdersManager phm = mock(PlaceholdersManager.class);
+        when(plugin.getPlaceholdersManager()).thenReturn(phm);
+        when(phm.replacePlaceholders(any(), anyString())).thenAnswer((Answer<String>) invocation -> invocation.getArgument(1, String.class));
+
         ffl.disable(p2, User.getInstance(p2), island);
         verify(p2).sendMessage(eq("islandfly.disable-fly"));
     }
