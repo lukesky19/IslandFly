@@ -29,7 +29,10 @@ If the fly mode should be disabled when a player disconnect.
 **/[gamemode] flighttime <get | delete> <player name>** - This command can be used to **get** or **delete** flight time for a player.
 
 ## Permissions
-**[gamemode].island.fly** - For usage of flight command
+**[gamemode].island.fly** - For usage of flight command.
+**[gamemode].island.tempfly** - For usage of the temporary flight command.
+**[gamemode].island.flighttime** - For usage of the player flight time command.
+**[gamemode].admin.flighttime** - For usage of the admin flight time command.
 
 Example: 
     **bskyblock.island.fly**
