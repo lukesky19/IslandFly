@@ -23,25 +23,29 @@ If the fly mode should be disabled when a player disconnect.
 
 ## Commands
 **/is fly** - This command toggles flight **On** and **Off**
+
 **/is tempfly** - This command toggles temporary flight **On** and **Off**
+
 **/is flighttime** - This command can be used to retrieve your current temporary flight time.
-**/[gamemode] flighttime <set | add | remove> <player name> <time>** - This command can be used to **set**, **add**, or **remove** flight time for a player.
-**/[gamemode] flighttime <get | delete> <player name>** - This command can be used to **get** or **delete** flight time for a player.
+
+**/[gamemode] flighttime <set | add | remove> \<player name> <time>** - This command can be used to **set**, **add**, or **remove** flight time for a player.
+
+**/[gamemode] flighttime <get | delete> \<player name>** - This command can be used to **get** or **delete** flight time for a player.
 
 ## Permissions
 **[gamemode].island.fly** - For usage of flight command.
+
 **[gamemode].island.tempfly** - For usage of the temporary flight command.
+
 **[gamemode].island.flighttime** - For usage of the player flight time command.
+
 **[gamemode].admin.flighttime** - For usage of the admin flight time command.
 
-Example: 
-    **bskyblock.island.fly**
+**[gamemode].island.flybypass** - Enables user to use fly command on other islands too.
 
-**[gamemode].island.flybypass** - Enables user to use fly command on other islands too
-
-
-Example:
-**caveblock.island.flybypass**
+Examples:<br/>
+    **bskyblock.island.fly**<br/>
+    **caveblock.island.flybypass**
   
 
 
