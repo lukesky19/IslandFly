@@ -10,30 +10,33 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import world.bentobox.bentobox.api.localization.TextVariables;
 import world.bentobox.bentobox.api.user.User;
 import world.bentobox.islandfly.IslandFlyAddon;
+import world.bentobox.islandfly.managers.FlightTimeManager;
 
 /**
  * This class disables fly mode if player quits server.
  */
 public class FlyLoginListener implements Listener {
-
     /**
      * IslandFlyAddon instance.
      */
     private final IslandFlyAddon islandFlyAddon;
-
+    /**
+     * FlightTimeManager instance.
+     */
+    final FlightTimeManager flightTimeManager;
 
     /**
-     * Default constructor.
-     * @param islandFlyAddon instance of IslandFlyAddon
+     * Constructor.
+     * @param islandFlyAddon Instance of IslandFlyAddon
+     * @param flightTimeManager Instance of FlightTimeManager
      */
-    public FlyLoginListener(IslandFlyAddon islandFlyAddon)
-    {
+    public FlyLoginListener(IslandFlyAddon islandFlyAddon, FlightTimeManager flightTimeManager) {
         this.islandFlyAddon = islandFlyAddon;
+        this.flightTimeManager = flightTimeManager;
     }
 
-
     /**
-     * Disable player fly mode on logout
+     * Enable player fly mode on login
      * @param event Instance of PlayerQuitEvent
      */
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
@@ -41,32 +44,63 @@ public class FlyLoginListener implements Listener {
         final Player player = event.getPlayer();
         final User user = User.getInstance(player);
         final String permPrefix = islandFlyAddon.getPlugin().getIWM().getPermissionPrefix(player.getWorld());
-        if (player.hasPermission(permPrefix + "island.fly")
-                && !this.islandFlyAddon.getSettings().isFlyDisableOnLogout()
-                && isInAir(player)
-                && islandFlyAddon.getIslands().userIsOnIsland(user.getWorld(), user)
-                && !islandFlyAddon.getIslands().getIslandAt(user.getLocation()).map(i -> {
 
-                    if(islandFlyAddon.getSettings().getFlyMinLevel() > 1 && islandFlyAddon.getLevelAddon() != null) {
-                        if (islandFlyAddon.getLevelAddon().getIslandLevel(i.getWorld(), i.getOwner()) < islandFlyAddon.getSettings().getFlyMinLevel()) {
-                            user.sendMessage("islandfly.fly-min-level-alert", TextVariables.NUMBER, String.valueOf(islandFlyAddon.getSettings().getFlyMinLevel()));
-                            return false;
+        // Only enable flight on login if the player is in a gamemode world.
+        if(!islandFlyAddon.getPlugin().getIWM().getWorlds().contains(user.getWorld())) return;
+
+        if (player.hasPermission(permPrefix + "island.fly")
+                && player.hasPermission(permPrefix + "island.tempfly")
+                || player.hasPermission(permPrefix + "island.fly")) {
+            if (!this.islandFlyAddon.getSettings().isFlyDisableOnLogout()
+                    && isInAir(player)
+                    && islandFlyAddon.getIslands().userIsOnIsland(user.getWorld(), user)
+                    && !islandFlyAddon.getIslands().getIslandAt(user.getLocation()).map(i -> {
+                        if (islandFlyAddon.getSettings().getFlyMinLevel() > 1 && islandFlyAddon.getLevelAddon() != null) {
+                            if (islandFlyAddon.getLevelAddon().getIslandLevel(i.getWorld(), i.getOwner()) < islandFlyAddon.getSettings().getFlyMinLevel()) {
+                                user.sendMessage("islandfly.fly-min-level-alert", TextVariables.NUMBER, String.valueOf(islandFlyAddon.getSettings().getFlyMinLevel()));
+                                return false;
+                            }
                         }
-                    }
-                    if (i.isAllowed(user, IslandFlyAddon.ISLAND_FLY_PROTECTION)) {
-                        // Enable fly
-                        player.setFallDistance(0);
-                        player.setAllowFlight(true);
-                        player.setFlying(true);
-                        user.sendMessage("islandfly.enable-fly");
-                        return true;
-                    }
-                    return false;
-                }).orElse(false)) {
-            user.sendMessage("islandfly.command.not-allowed-fly");
+                        if (i.isAllowed(user, IslandFlyAddon.ISLAND_FLY_PROTECTION)) {
+                            // Enable fly
+                            player.setFallDistance(0);
+                            player.setAllowFlight(true);
+                            player.setFlying(true);
+                            user.sendMessage("islandfly.enable-fly");
+                            return true;
+                        }
+                        return false;
+                    }).orElse(false)) {
+                user.sendMessage("islandfly.not-allowed-fly");
+            }
+        } else if(player.hasPermission(permPrefix + "island.tempfly")) {
+            if (!this.islandFlyAddon.getSettings().isFlyDisableOnLogout()
+                    && isInAir(player)
+                    && islandFlyAddon.getIslands().userIsOnIsland(user.getWorld(), user)
+                    && !islandFlyAddon.getIslands().getIslandAt(user.getLocation()).map(i -> {
+                        if (islandFlyAddon.getSettings().getFlyMinLevel() > 1 && islandFlyAddon.getLevelAddon() != null) {
+                            if (islandFlyAddon.getLevelAddon().getIslandLevel(i.getWorld(), i.getOwner()) < islandFlyAddon.getSettings().getFlyMinLevel()) {
+                                user.sendMessage("islandfly.fly-min-level-alert", TextVariables.NUMBER, String.valueOf(islandFlyAddon.getSettings().getFlyMinLevel()));
+                                return false;
+                            }
+                        }
+                        if (i.isAllowed(user, IslandFlyAddon.ISLAND_FLY_PROTECTION)) {
+                            // Enable fly
+                            flightTimeManager.trackPlayerFlightTime(player);
+                            player.setFallDistance(0);
+                            player.setAllowFlight(true);
+                            player.setFlying(true);
+                            user.sendMessage("islandfly.enable-fly");
+                            return true;
+                        }
+                        return false;
+                    }).orElse(false)) {
+                user.sendMessage("islandfly.not-allowed-fly");
+            }
+        } else {
+            user.sendMessage("islandfly.not-allowed-fly");
         }
     }
-
 
     private boolean isInAir(Player player) {
         Block b = player.getLocation().getBlock();
