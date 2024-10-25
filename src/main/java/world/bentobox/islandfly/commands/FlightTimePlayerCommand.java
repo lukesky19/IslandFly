@@ -8,6 +8,7 @@ import world.bentobox.islandfly.database.object.IslandFlyPlayerData;
 import world.bentobox.islandfly.managers.FlightTimeManager;
 
 import java.util.List;
+import java.util.UUID;
 
 /**
  * This command allows players to view how much flight time they have.
@@ -56,14 +57,20 @@ public class FlightTimePlayerCommand extends CompositeCommand {
     public boolean execute(User user, String label, List<String> args) {
         // Get the user's flight data and verify it exists and is valid.
         // If not, just tell them it is 0 even though no data exists for them.
-        IslandFlyPlayerData data = flightTimeManager.getPlayerFlightData(user.getUniqueId());
+        UUID uuid = user.getUniqueId();
+        IslandFlyPlayerData data = flightTimeManager.getPlayerFlightData(uuid);
         if(data == null) {
             user.sendMessage("islandfly.commands.player.flighttime.flight-time", TextVariables.NUMBER, String.valueOf(0));
             return false;
         }
 
         // Send the user the amount of flight time they have.
-        user.sendMessage("islandfly.commands.player.flighttime.flight-time", TextVariables.NUMBER, String.valueOf(data.getTimeSeconds()));
+        if(flightTimeManager.isPlayerFlightTimeTracked(uuid)) {
+            user.sendMessage("islandfly.commands.player.flighttime.flight-time", TextVariables.NUMBER, String.valueOf(flightTimeManager.getActivePlayerFlightTime(uuid)));
+        } else {
+            user.sendMessage("islandfly.commands.player.flighttime.flight-time", TextVariables.NUMBER, String.valueOf(data.getTimeSeconds()));
+        }
+
         return true;
     }
 }

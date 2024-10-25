@@ -10,6 +10,7 @@ import world.bentobox.bentobox.database.Database;
 import world.bentobox.islandfly.IslandFlyAddon;
 import world.bentobox.islandfly.database.object.IslandFlyPlayerData;
 
+import javax.annotation.CheckForNull;
 import java.util.HashMap;
 import java.util.Objects;
 import java.util.UUID;
@@ -198,6 +199,11 @@ public class FlightTimeManager {
         } else {
             return null;
         }
+    }
+
+    @CheckForNull
+    public Integer getActivePlayerFlightTime(UUID uuid) {
+        return activePlayerFlightTime.get(uuid);
     }
 
     /**
