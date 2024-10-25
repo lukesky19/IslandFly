@@ -3,7 +3,6 @@ package world.bentobox.islandfly.managers;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitScheduler;
-import org.bukkit.scheduler.BukkitTask;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,8 +42,6 @@ public class FlightTimeManagerTest {
     static IslandFlyAddon addon;
     @Mock
     Player player;
-    @Mock
-    static BukkitScheduler scheduler;
 
     UUID uuid;
     static MockedStatic<Bukkit> mockedBukkitClass;

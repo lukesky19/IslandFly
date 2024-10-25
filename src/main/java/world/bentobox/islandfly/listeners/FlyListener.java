@@ -62,6 +62,7 @@ public class FlyListener implements Listener {
         if(user.isOp() || user.getPlayer().getGameMode().equals(GameMode.CREATIVE)
                 || user.getPlayer().getGameMode().equals(GameMode.SPECTATOR)
                 || user.hasPermission(permPrefix + "island.flybypass")) return false;
+
         return removeFly(user);
     }
 
@@ -73,7 +74,12 @@ public class FlyListener implements Listener {
     public void onEnterIsland(final IslandEnterEvent event) {
         final User user = User.getInstance(event.getPlayerUUID());
         // Wait until after arriving at the island
-        Bukkit.getScheduler().runTask(this.islandFlyAddon.getPlugin(), () -> checkUser(user));
+        Bukkit.getScheduler().runTask(this.islandFlyAddon.getPlugin(), () -> {
+            // If flight was not removed, attempt to automatically re-enable flight
+            if(!checkUser(user)) {
+                enableFly(user);
+            }
+        });
     }
 
     /**
@@ -92,6 +98,7 @@ public class FlyListener implements Listener {
                         && !user.hasPermission(permPrefix + "island.flyspawn"))) {
             return;
         }
+
         // Alert player fly will be disabled
         final int flyTimeout = this.islandFlyAddon.getSettings().getFlyTimeout();
 
@@ -108,7 +115,6 @@ public class FlyListener implements Listener {
 
         Bukkit.getScheduler().runTaskLater(this.islandFlyAddon.getPlugin(), () -> removeFly(user), 20L* flyTimeout);
     }
-
 
     /**
      * Remove fly from a player if required.
@@ -149,10 +155,9 @@ public class FlyListener implements Listener {
             disableFly(user);
             return true;
         }
+
         return false;
     }
-
-
 
     /**
      * Disable player fly and alert it.
@@ -172,5 +177,42 @@ public class FlyListener implements Listener {
         // Disable flight
         player.setFlying(false);
         player.setAllowFlight(false);
+    }
+
+    /**
+     * Check if flight is allowed and enable it if it is.
+     * @param user The BentoBox User
+     */
+    private void enableFly(User user) {
+        Player player = user.getPlayer();
+        final String permPrefix = islandFlyAddon.getPlugin().getIWM().getPermissionPrefix(player.getWorld());
+
+        // Don't enable flight if the island is not on an island.
+        Island island = islandFlyAddon.getIslands().getProtectedIslandAt(user.getLocation()).orElse(null);
+        if(island == null) return;
+
+        // Don't enable flight if the island doesn't meet the minimum island level to fly.
+        if(islandFlyAddon.getSettings().getFlyMinLevel() > 1 && islandFlyAddon.getLevelAddon() != null) {
+            if(islandFlyAddon.getLevelAddon().getIslandLevel(island.getWorld(), island.getOwner()) < islandFlyAddon.getSettings().getFlyMinLevel()) return;
+        }
+
+        if((player.hasPermission(permPrefix + "island.fly")
+                && player.hasPermission(permPrefix + "island.tempfly"))
+                || player.hasPermission(permPrefix + "island.fly")) {
+            player.setFallDistance(0);
+            player.setAllowFlight(true);
+            player.setFlying(true);
+            user.sendMessage("islandfly.enable-fly");
+            return;
+        } else if(player.hasPermission(permPrefix + "island.tempfly")) {
+            if(flightTimeManager.getPlayerFlightData(player.getUniqueId()).getTimeSeconds() > 0) {
+                flightTimeManager.trackPlayerFlightTime(player);
+                player.setFallDistance(0);
+                player.setAllowFlight(true);
+                player.setFlying(true);
+                user.sendMessage("islandfly.enable-fly");
+                return;
+            }
+        }
     }
 }

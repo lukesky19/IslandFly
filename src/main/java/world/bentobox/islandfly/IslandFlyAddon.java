@@ -34,7 +34,7 @@ public class IslandFlyAddon extends Addon {
     /**
      * FlightTimeManager instance
      */
-    FlightTimeManager flightTimeManager;
+    private FlightTimeManager flightTimeManager;
 
     /**
      * A flag to allow or disallow flight on island
