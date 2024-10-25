@@ -1,5 +1,8 @@
 package world.bentobox.islandfly.listeners;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.entity.Player;
@@ -7,9 +10,12 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerToggleFlightEvent;
+import org.eclipse.jdt.annotation.NonNull;
+
 import world.bentobox.bentobox.api.events.island.IslandEnterEvent;
 import world.bentobox.bentobox.api.events.island.IslandExitEvent;
 import world.bentobox.bentobox.api.localization.TextVariables;
+import world.bentobox.bentobox.api.metadata.MetaDataValue;
 import world.bentobox.bentobox.api.user.User;
 import world.bentobox.bentobox.database.objects.Island;
 import world.bentobox.islandfly.IslandFlyAddon;
@@ -19,6 +25,8 @@ import world.bentobox.islandfly.managers.FlightTimeManager;
  * This class manages players fly ability.
  */
 public class FlyListener implements Listener {
+
+    private static final @NonNull String ISLANDFLY = "IslandFly-";
     /**
      * Addon instance object.
      */
@@ -47,6 +55,14 @@ public class FlyListener implements Listener {
         final User user = User.getInstance(event.getPlayer());
         if(checkUser(user)) {
             user.sendMessage("islandfly.not-allowed");
+        } else {
+            addon.getIslands().getIslandAt(user.getLocation())
+                    .filter(i -> i.getMemberSet().contains(user.getUniqueId())).ifPresent(is -> {
+                        Map<String, MetaDataValue> metaData = new HashMap<>();
+                        metaData.put("IslandFly-" + is.getUniqueId(), new MetaDataValue(event.isFlying()));
+                        user.setMetaData(metaData); // Record the fly state for this island
+                    });
+
         }
     }
 
@@ -73,13 +89,13 @@ public class FlyListener implements Listener {
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onEnterIsland(final IslandEnterEvent event) {
         final User user = User.getInstance(event.getPlayerUUID());
+        user.getMetaData(ISLANDFLY + event.getIsland().getUniqueId())
+                .ifPresent(mdv -> {
+                    user.getPlayer().setAllowFlight(true);
+                    user.getPlayer().setFlying(mdv.asBoolean());
+                });
         // Wait until after arriving at the island
-        Bukkit.getScheduler().runTask(this.islandFlyAddon.getPlugin(), () -> {
-            // If flight was not removed, attempt to automatically re-enable flight
-            if(!checkUser(user)) {
-                enableFly(user);
-            }
-        });
+        Bukkit.getScheduler().runTask(this.islandFlyAddon.getPlugin(), () -> checkUser(user));
     }
 
     /**
@@ -177,42 +193,5 @@ public class FlyListener implements Listener {
         // Disable flight
         player.setFlying(false);
         player.setAllowFlight(false);
-    }
-
-    /**
-     * Check if flight is allowed and enable it if it is.
-     * @param user The BentoBox User
-     */
-    private void enableFly(User user) {
-        Player player = user.getPlayer();
-        final String permPrefix = islandFlyAddon.getPlugin().getIWM().getPermissionPrefix(player.getWorld());
-
-        // Don't enable flight if the island is not on an island.
-        Island island = islandFlyAddon.getIslands().getProtectedIslandAt(user.getLocation()).orElse(null);
-        if(island == null) return;
-
-        // Don't enable flight if the island doesn't meet the minimum island level to fly.
-        if(islandFlyAddon.getSettings().getFlyMinLevel() > 1 && islandFlyAddon.getLevelAddon() != null) {
-            if(islandFlyAddon.getLevelAddon().getIslandLevel(island.getWorld(), island.getOwner()) < islandFlyAddon.getSettings().getFlyMinLevel()) return;
-        }
-
-        if((player.hasPermission(permPrefix + "island.fly")
-                && player.hasPermission(permPrefix + "island.tempfly"))
-                || player.hasPermission(permPrefix + "island.fly")) {
-            player.setFallDistance(0);
-            player.setAllowFlight(true);
-            player.setFlying(true);
-            user.sendMessage("islandfly.enable-fly");
-            return;
-        } else if(player.hasPermission(permPrefix + "island.tempfly")) {
-            if(flightTimeManager.getPlayerFlightData(player.getUniqueId()).getTimeSeconds() > 0) {
-                flightTimeManager.trackPlayerFlightTime(player);
-                player.setFallDistance(0);
-                player.setAllowFlight(true);
-                player.setFlying(true);
-                user.sendMessage("islandfly.enable-fly");
-                return;
-            }
-        }
     }
 }
