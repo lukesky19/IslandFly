@@ -1,13 +1,10 @@
 package world.bentobox.islandfly.listeners;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
-import java.util.Optional;
 import java.util.UUID;
 
 import org.bukkit.*;
@@ -22,19 +19,19 @@ import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import world.bentobox.bentobox.BentoBox;
-import world.bentobox.bentobox.api.addons.GameModeAddon;
+import world.bentobox.bentobox.api.events.island.IslandEnterEvent;
 import world.bentobox.bentobox.api.events.island.IslandExitEvent;
+import world.bentobox.bentobox.api.localization.TextVariables;
 import world.bentobox.bentobox.api.user.User;
 import world.bentobox.bentobox.database.objects.Island;
-import world.bentobox.bentobox.managers.IslandWorldManager;
-import world.bentobox.bentobox.managers.IslandsManager;
 import world.bentobox.islandfly.IslandFlyAddon;
 import world.bentobox.islandfly.config.Settings;
+import world.bentobox.islandfly.managers.FlightCheckManager;
 import world.bentobox.islandfly.managers.FlightTimeManager;
 
 /**
  * @author tastybento
- *
+ * @author lukeskywlker19
  */
 @ExtendWith(MockitoExtension.class)
 public class FlyListenerTest {
@@ -45,431 +42,704 @@ public class FlyListenerTest {
 
     private FlyListener fl;
     @Mock
-    private IslandsManager im;
-    @Mock
     private User user;
 
     @Mock
     private Island island;
     @Mock
-    private Island island2;
-    private Optional<Island> opIsland2;
-    @Mock
     private Player p;
     @Mock
-    private IslandWorldManager iwm;
-    @Mock
-    private World world;
-    @Mock
-    private GameModeAddon gameMode;
     private UUID uuid;
+    @Mock
+    Server server;
     @Mock
     private BukkitScheduler sch;
     @Mock
     private Settings settings;
     @Mock
-    FlightTimeManager flightTimeManager;
+    private FlightTimeManager flightTimeManager;
+    @Mock
+    private FlightCheckManager flightCheckManager;
 
     MockedStatic<User> mockedUserClass;
-    MockedStatic<Bukkit> mockedBukkitClass;
 
     @BeforeEach
     public void setUp() {
         // User
-        uuid = UUID.randomUUID();
-        when(p.getUniqueId()).thenReturn(uuid);
-        User.setPlugin(plugin);
-        User.getInstance(p);
-        // Bukkit
-        mockedBukkitClass = mockStatic(Bukkit.class);
-        mockedBukkitClass.when(Bukkit::getScheduler).thenReturn(sch);
-        // User
         mockedUserClass = mockStatic(User.class);
         mockedUserClass.when(() -> User.getInstance(uuid)).thenReturn(user);
 
-        fl = new FlyListener(addon, flightTimeManager);
+        fl = new FlyListener(addon, flightTimeManager, flightCheckManager);
     }
 
     @AfterEach
     public void tearDown() {
         User.clearUsers();
         mockedUserClass.close();
-        mockedBukkitClass.close();
     }
 
-    /**
-     * Test method for {@link world.bentobox.islandfly.listeners.FlyListener#onExitIsland(world.bentobox.bentobox.api.events.island.IslandExitEvent)}.
-     */
     @Test
-    public void testOnExitIslandGraceTime() {
-        // IWM
+    public void testOnEnterIsland() {
+        IslandEnterEvent event = mock(IslandEnterEvent.class);
+
+        when(event.getPlayerUUID()).thenReturn(uuid);
+        when(event.getIsland()).thenReturn(island);
+
         when(addon.getPlugin()).thenReturn(plugin);
-        when(plugin.getIWM()).thenReturn(iwm);
-        when(iwm.getPermissionPrefix(any())).thenReturn("bskyblock.");
+        when(addon.getServer()).thenReturn(server);
+        when(server.getScheduler()).thenReturn(sch);
 
-        when(p.getGameMode()).thenReturn(GameMode.SURVIVAL);
+        fl.onEnterIsland(event);
 
-        when(user.isOp()).thenReturn(false);
+        verify(sch).runTaskLater(eq(plugin), any(Runnable.class), eq(1L));
+    }
+
+    @Test
+    public void testOnExitIsland() {
+        IslandExitEvent event = mock(IslandExitEvent.class);
+
+        when(event.getPlayerUUID()).thenReturn(uuid);
+
+        when(addon.getPlugin()).thenReturn(plugin);
+        when(addon.getServer()).thenReturn(server);
+        when(server.getScheduler()).thenReturn(sch);
+
+        fl.onExitIsland(event);
+
+        verify(sch).runTaskLater(eq(plugin), any(Runnable.class), eq(1L));
+    }
+
+    @Test
+    public void testCheckEnableFlyPlayerFlying() {
+        when(User.getInstance(uuid)).thenReturn(user);
+        when(user.getPlayer()).thenReturn(p);
+        when(flightCheckManager.isPlayerAllowedFlight(p)).thenReturn(true);
+
+        assertFalse(fl.checkEnableFly(user, island));
+        assertTrue(flightCheckManager.isPlayerAllowedFlight(p));
+        assertFalse(flightCheckManager.isIslandSpawnIsland(island));
+        assertFalse(flightCheckManager.canUserFlySpawn(user));
+        assertFalse(flightCheckManager.canUserFlyIslandLevel(island));
+        assertFalse(flightCheckManager.canUserFlyOnIsland(island, user));
+        assertFalse(flightCheckManager.canUserUseFly(user));
+        assertFalse(flightCheckManager.canUserUseTempFly(user));
+    }
+
+    @Test
+    public void testCheckEnableFlyPlayerNotFlying() {
+        when(User.getInstance(uuid)).thenReturn(user);
+        when(user.getPlayer()).thenReturn(p);
+
+        assertFalse(fl.checkEnableFly(user, island));
+        assertFalse(flightCheckManager.isPlayerAllowedFlight(p));
+        assertFalse(flightCheckManager.isIslandSpawnIsland(island));
+        assertFalse(flightCheckManager.canUserFlySpawn(user));
+        assertFalse(flightCheckManager.canUserFlyIslandLevel(island));
+        assertFalse(flightCheckManager.canUserFlyOnIsland(island, user));
+        assertFalse(flightCheckManager.canUserUseFly(user));
+        assertFalse(flightCheckManager.canUserUseTempFly(user));
+    }
+
+    @Test
+    public void testCheckEnableFlySpawnIslandCanFlySpawn() {
+        when(User.getInstance(uuid)).thenReturn(user);
+        when(user.getPlayer()).thenReturn(p);
+        when(flightCheckManager.isIslandSpawnIsland(island)).thenReturn(true);
+        when(flightCheckManager.canUserFlySpawn(user)).thenReturn(true);
+
+        assertFalse(fl.checkEnableFly(user, island));
+        assertFalse(flightCheckManager.isPlayerAllowedFlight(p));
+        assertTrue(flightCheckManager.isIslandSpawnIsland(island));
+        assertTrue(flightCheckManager.canUserFlySpawn(user));
+        assertFalse(flightCheckManager.canUserFlyIslandLevel(island));
+        assertFalse(flightCheckManager.canUserFlyOnIsland(island, user));
+        assertFalse(flightCheckManager.canUserUseFly(user));
+        assertFalse(flightCheckManager.canUserUseTempFly(user));
+
+    }
+
+    @Test
+    public void testCheckEnableFlySpawnIslandCanNotFlySpawn() {
+        when(User.getInstance(uuid)).thenReturn(user);
+        when(user.getPlayer()).thenReturn(p);
+        when(flightCheckManager.isIslandSpawnIsland(island)).thenReturn(true);
+
+        assertFalse(fl.checkEnableFly(user, island));
+        assertFalse(flightCheckManager.isPlayerAllowedFlight(p));
+        assertTrue(flightCheckManager.isIslandSpawnIsland(island));
+        assertFalse(flightCheckManager.canUserFlySpawn(user));
+        assertFalse(flightCheckManager.canUserFlyIslandLevel(island));
+        assertFalse(flightCheckManager.canUserFlyOnIsland(island, user));
+        assertFalse(flightCheckManager.canUserUseFly(user));
+        assertFalse(flightCheckManager.canUserUseTempFly(user));
+    }
+
+    @Test
+    public void testCheckEnableFlyNotSpawnIslandCanFlySpawn() {
+        when(User.getInstance(uuid)).thenReturn(user);
+        when(user.getPlayer()).thenReturn(p);
+        when(flightCheckManager.canUserFlySpawn(user)).thenReturn(true);
+
+        assertFalse(fl.checkEnableFly(user, island));
+        assertFalse(flightCheckManager.isPlayerAllowedFlight(p));
+        assertFalse(flightCheckManager.isIslandSpawnIsland(island));
+        assertTrue(flightCheckManager.canUserFlySpawn(user));
+        assertFalse(flightCheckManager.canUserFlyIslandLevel(island));
+        assertFalse(flightCheckManager.canUserFlyOnIsland(island, user));
+        assertFalse(flightCheckManager.canUserUseFly(user));
+        assertFalse(flightCheckManager.canUserUseTempFly(user));
+    }
+
+    @Test
+    public void testCheckEnableFlyNotSpawnIslandCanNotFlySpawn() {
+        when(User.getInstance(uuid)).thenReturn(user);
+        when(user.getPlayer()).thenReturn(p);
+
+        assertFalse(fl.checkEnableFly(user, island));
+        assertFalse(flightCheckManager.isPlayerAllowedFlight(p));
+        assertFalse(flightCheckManager.isIslandSpawnIsland(island));
+        assertFalse(flightCheckManager.canUserFlySpawn(user));
+        assertFalse(flightCheckManager.canUserFlyIslandLevel(island));
+        assertFalse(flightCheckManager.canUserFlyOnIsland(island, user));
+        assertFalse(flightCheckManager.canUserUseFly(user));
+        assertFalse(flightCheckManager.canUserUseTempFly(user));
+    }
+
+    @Test
+    public void testCheckEnableFlyCanFlyIslandLevel() {
+        when(User.getInstance(uuid)).thenReturn(user);
+        when(user.getPlayer()).thenReturn(p);
+        when(flightCheckManager.canUserFlyIslandLevel(island)).thenReturn(true);
+
+        assertFalse(fl.checkEnableFly(user, island));
+        assertFalse(flightCheckManager.isPlayerAllowedFlight(p));
+        assertFalse(flightCheckManager.isIslandSpawnIsland(island));
+        assertFalse(flightCheckManager.canUserFlySpawn(user));
+        assertTrue(flightCheckManager.canUserFlyIslandLevel(island));
+        assertFalse(flightCheckManager.canUserFlyOnIsland(island, user));
+        assertFalse(flightCheckManager.canUserUseFly(user));
+        assertFalse(flightCheckManager.canUserUseTempFly(user));
+    }
+
+    @Test
+    public void testCheckEnableFlyCannotFlyIslandLevel() {
+        when(User.getInstance(uuid)).thenReturn(user);
+        when(user.getPlayer()).thenReturn(p);
+
+        assertFalse(fl.checkEnableFly(user, island));
+        assertFalse(flightCheckManager.isPlayerAllowedFlight(p));
+        assertFalse(flightCheckManager.isIslandSpawnIsland(island));
+        assertFalse(flightCheckManager.canUserFlySpawn(user));
+        assertFalse(flightCheckManager.canUserFlyIslandLevel(island));
+        assertFalse(flightCheckManager.canUserFlyOnIsland(island, user));
+        assertFalse(flightCheckManager.canUserUseFly(user));
+        assertFalse(flightCheckManager.canUserUseTempFly(user));
+    }
+
+    @Test
+    public void testCheckEnableFlyCanFlyOnIsland() {
+        when(User.getInstance(uuid)).thenReturn(user);
+        when(user.getPlayer()).thenReturn(p);
+        when(flightCheckManager.canUserFlyIslandLevel(island)).thenReturn(true);
+        when(flightCheckManager.canUserFlyOnIsland(island, user)).thenReturn(true);
+
+        assertFalse(fl.checkEnableFly(user, island));
+        assertFalse(flightCheckManager.isPlayerAllowedFlight(p));
+        assertFalse(flightCheckManager.isIslandSpawnIsland(island));
+        assertFalse(flightCheckManager.canUserFlySpawn(user));
+        assertTrue(flightCheckManager.canUserFlyIslandLevel(island));
+        assertTrue(flightCheckManager.canUserFlyOnIsland(island, user));
+        assertFalse(flightCheckManager.canUserUseFly(user));
+        assertFalse(flightCheckManager.canUserUseTempFly(user));
+    }
+
+    @Test
+    public void testCheckEnableFlyCannotFlyOnIsland() {
+        when(User.getInstance(uuid)).thenReturn(user);
+        when(user.getPlayer()).thenReturn(p);
+        when(flightCheckManager.canUserFlyIslandLevel(island)).thenReturn(true);
+
+        assertFalse(fl.checkEnableFly(user, island));
+        assertFalse(flightCheckManager.isPlayerAllowedFlight(p));
+        assertFalse(flightCheckManager.isIslandSpawnIsland(island));
+        assertFalse(flightCheckManager.canUserFlySpawn(user));
+        assertTrue(flightCheckManager.canUserFlyIslandLevel(island));
+        assertFalse(flightCheckManager.canUserFlyOnIsland(island, user));
+        assertFalse(flightCheckManager.canUserUseFly(user));
+        assertFalse(flightCheckManager.canUserUseTempFly(user));
+    }
+
+    @Test
+    public void testCheckEnableFlyUseFlyAndTempFly() {
+        when(User.getInstance(uuid)).thenReturn(user);
+        when(user.getPlayer()).thenReturn(p);
+        when(flightCheckManager.canUserFlyIslandLevel(island)).thenReturn(true);
+        when(flightCheckManager.canUserFlyOnIsland(island, user)).thenReturn(true);
+        when(flightCheckManager.canUserUseFly(user)).thenReturn(true);
+        when(flightCheckManager.canUserUseTempFly(user)).thenReturn(true);
+
+        assertTrue(fl.checkEnableFly(user, island));
+        assertFalse(flightCheckManager.isPlayerAllowedFlight(p));
+        assertFalse(flightCheckManager.isIslandSpawnIsland(island));
+        assertFalse(flightCheckManager.canUserFlySpawn(user));
+        assertTrue(flightCheckManager.canUserFlyIslandLevel(island));
+        assertTrue(flightCheckManager.canUserFlyOnIsland(island, user));
+        assertTrue(flightCheckManager.canUserUseFly(user));
+        assertTrue(flightCheckManager.canUserUseTempFly(user));
+    }
+
+    @Test
+    public void testCheckEnableFlyUseFly() {
+        when(User.getInstance(uuid)).thenReturn(user);
+        when(user.getPlayer()).thenReturn(p);
+        when(flightCheckManager.canUserFlyIslandLevel(island)).thenReturn(true);
+        when(flightCheckManager.canUserFlyOnIsland(island, user)).thenReturn(true);
+        when(flightCheckManager.canUserUseFly(user)).thenReturn(true);
+
+        assertTrue(fl.checkEnableFly(user, island));
+        assertFalse(flightCheckManager.isPlayerAllowedFlight(p));
+        assertFalse(flightCheckManager.isIslandSpawnIsland(island));
+        assertFalse(flightCheckManager.canUserFlySpawn(user));
+        assertTrue(flightCheckManager.canUserFlyIslandLevel(island));
+        assertTrue(flightCheckManager.canUserFlyOnIsland(island, user));
+        assertTrue(flightCheckManager.canUserUseFly(user));
+        assertFalse(flightCheckManager.canUserUseTempFly(user));
+    }
+
+    @Test
+    public void testCheckEnableFlyUseTempFly() {
+        when(User.getInstance(uuid)).thenReturn(user);
+        when(user.getPlayer()).thenReturn(p);
+        when(flightCheckManager.canUserFlyIslandLevel(island)).thenReturn(true);
+        when(flightCheckManager.canUserFlyOnIsland(island, user)).thenReturn(true);
+        when(flightCheckManager.canUserUseTempFly(user)).thenReturn(true);
+
+        assertTrue(fl.checkEnableFly(user, island));
+        assertFalse(flightCheckManager.isPlayerAllowedFlight(p));
+        assertFalse(flightCheckManager.isIslandSpawnIsland(island));
+        assertFalse(flightCheckManager.canUserFlySpawn(user));
+        assertTrue(flightCheckManager.canUserFlyIslandLevel(island));
+        assertTrue(flightCheckManager.canUserFlyOnIsland(island, user));
+        assertFalse(flightCheckManager.canUserUseFly(user));
+        assertTrue(flightCheckManager.canUserUseTempFly(user));
+    }
+
+    @Test
+    public void testCheckEnableFlyCannotUseFlyAndCannotUseTempFly() {
+        when(User.getInstance(uuid)).thenReturn(user);
+        when(user.getPlayer()).thenReturn(p);
+        when(flightCheckManager.canUserFlyIslandLevel(island)).thenReturn(true);
+        when(flightCheckManager.canUserFlyOnIsland(island, user)).thenReturn(true);
+
+        assertFalse(fl.checkEnableFly(user, island));
+        assertFalse(flightCheckManager.isPlayerAllowedFlight(p));
+        assertFalse(flightCheckManager.isIslandSpawnIsland(island));
+        assertFalse(flightCheckManager.canUserFlySpawn(user));
+        assertTrue(flightCheckManager.canUserFlyIslandLevel(island));
+        assertTrue(flightCheckManager.canUserFlyOnIsland(island, user));
+        assertFalse(flightCheckManager.canUserUseFly(user));
+        assertFalse(flightCheckManager.canUserUseTempFly(user));
+    }
+
+    @Test
+    public void testEnableFlightFly() {
+        when(user.getPlayer()).thenReturn(p);
+        when(flightCheckManager.canUserUseFly(user)).thenReturn(true);
+
+        assertTrue(fl.enableFlight(user));
+        verify(p).setAllowFlight(true);
+        verify(user).sendMessage("islandfly.enable-fly");
+    }
+
+    @Test
+    public void testEnableFlightTempFly() {
+        when(user.getPlayer()).thenReturn(p);
+        when(flightCheckManager.canUserUseTempFly(user)).thenReturn(true);
+
+        assertTrue(fl.enableFlight(user));
+        verify(p).setAllowFlight(true);
+        verify(user).sendMessage("islandfly.enable-fly");
+        verify(flightTimeManager).trackPlayerFlightTime(p);
+    }
+
+    @Test
+    public void testEnableFlightFlyAndTempFly() {
+        when(user.getPlayer()).thenReturn(p);
+        when(flightCheckManager.canUserUseFly(user)).thenReturn(true);
+        when(flightCheckManager.canUserUseTempFly(user)).thenReturn(true);
+
+        assertTrue(fl.enableFlight(user));
+        verify(p).setAllowFlight(true);
+        verify(user).sendMessage("islandfly.enable-fly");
+        verify(flightTimeManager, never()).trackPlayerFlightTime(p);
+    }
+
+    @Test
+    public void testEnableFlightNoFly() {
+        when(user.getPlayer()).thenReturn(p);
+
+        assertFalse(fl.enableFlight(user));
+        verify(p, never()).setAllowFlight(true);
+        verify(user, never()).sendMessage("islandfly.enable-fly");
+        verify(flightTimeManager, never()).trackPlayerFlightTime(p);
+    }
+
+    @Test
+    public void testCheckRemoveFlyUserOp() {
+        when(User.getInstance(uuid)).thenReturn(user);
+        when(flightCheckManager.isUserOp(user)).thenReturn(true);
+
+        assertFalse(fl.checkRemoveFly(user));
+        assertTrue(flightCheckManager.isUserOp(user));
+        assertFalse(flightCheckManager.isUserCreativeOrSpectator(user));
+        assertFalse(flightCheckManager.canUserBypassFly(user));
+    }
+
+    @Test
+    public void testCheckRemoveFlyUserCreativeOrSpectator() {
+        when(User.getInstance(uuid)).thenReturn(user);
+        when(flightCheckManager.isUserCreativeOrSpectator(user)).thenReturn(true);
+
+        assertFalse(fl.checkRemoveFly(user));
+        assertFalse(flightCheckManager.isUserOp(user));
+        assertTrue(flightCheckManager.isUserCreativeOrSpectator(user));
+        assertFalse(flightCheckManager.canUserBypassFly(user));
+    }
+
+    @Test
+    public void testCheckRemoveFlyUserCanBypassFly() {
+        when(User.getInstance(uuid)).thenReturn(user);
+        when(flightCheckManager.canUserBypassFly(user)).thenReturn(true);
+
+        assertFalse(fl.checkRemoveFly(user));
+        assertFalse(flightCheckManager.isUserOp(user));
+        assertFalse(flightCheckManager.isUserCreativeOrSpectator(user));
+        assertTrue(flightCheckManager.canUserBypassFly(user));
+    }
+
+    @Test
+    public void testCheckRemoveFlyNotOnIsland() {
+        when(User.getInstance(uuid)).thenReturn(user);
+
+        when(flightCheckManager.getIslandUserIsOn(user)).thenReturn(null);
+
+        assertTrue(fl.checkRemoveFly(user));
+        assertFalse(flightCheckManager.isUserOp(user));
+        assertFalse(flightCheckManager.isUserCreativeOrSpectator(user));
+        assertFalse(flightCheckManager.canUserBypassFly(user));
+
+        assertNull(flightCheckManager.getIslandUserIsOn(user));
+    }
+
+    @Test
+    public void testCheckRemoveFlyCannotFlyAndCannotTempFly() {
+        when(User.getInstance(uuid)).thenReturn(user);
+
+        when(flightCheckManager.getIslandUserIsOn(user)).thenReturn(island);
+
+        assertTrue(fl.checkRemoveFly(user));
+        assertFalse(flightCheckManager.isUserOp(user));
+        assertFalse(flightCheckManager.isUserCreativeOrSpectator(user));
+        assertFalse(flightCheckManager.canUserBypassFly(user));
+
+        assertFalse(flightCheckManager.canUserUseFly(user));
+        assertFalse(flightCheckManager.canUserUseTempFly(user));
+    }
+
+    @Test
+    public void testCheckRemoveFlyCanFlyAndCannotTempFly() {
+        when(User.getInstance(uuid)).thenReturn(user);
+
+        when(flightCheckManager.getIslandUserIsOn(user)).thenReturn(island);
+        when(flightCheckManager.canUserUseFly(user)).thenReturn(true);
+
+        assertTrue(fl.checkRemoveFly(user));
+        assertFalse(flightCheckManager.isUserOp(user));
+        assertFalse(flightCheckManager.isUserCreativeOrSpectator(user));
+        assertFalse(flightCheckManager.canUserBypassFly(user));
+
+        assertTrue(flightCheckManager.canUserUseFly(user));
+        assertFalse(flightCheckManager.canUserUseTempFly(user));
+    }
+
+    @Test
+    public void testCheckRemoveFlyCannotFlyAndCanTempFly() {
+        when(User.getInstance(uuid)).thenReturn(user);
+
+        when(flightCheckManager.getIslandUserIsOn(user)).thenReturn(island);
+        when(flightCheckManager.canUserUseTempFly(user)).thenReturn(true);
+
+        assertTrue(fl.checkRemoveFly(user));
+        assertFalse(flightCheckManager.isUserOp(user));
+        assertFalse(flightCheckManager.isUserCreativeOrSpectator(user));
+        assertFalse(flightCheckManager.canUserBypassFly(user));
+
+        assertFalse(flightCheckManager.canUserUseFly(user));
+        assertTrue(flightCheckManager.canUserUseTempFly(user));
+    }
+
+    @Test
+    public void testCheckRemoveFlyCanFlyAndCanTempFly() {
+        when(User.getInstance(uuid)).thenReturn(user);
+
+        when(flightCheckManager.getIslandUserIsOn(user)).thenReturn(island);
+        when(flightCheckManager.canUserUseFly(user)).thenReturn(true);
+        when(flightCheckManager.canUserUseTempFly(user)).thenReturn(true);
+
+        assertTrue(fl.checkRemoveFly(user));
+        assertFalse(flightCheckManager.isUserOp(user));
+        assertFalse(flightCheckManager.isUserCreativeOrSpectator(user));
+        assertFalse(flightCheckManager.canUserBypassFly(user));
+
+        assertTrue(flightCheckManager.canUserUseFly(user));
+        assertTrue(flightCheckManager.canUserUseTempFly(user));
+    }
+
+    @Test
+    public void testCheckRemoveFlySpawnIslandCannotFly() {
+        when(User.getInstance(uuid)).thenReturn(user);
+
+        when(flightCheckManager.getIslandUserIsOn(user)).thenReturn(island);
+        when(flightCheckManager.canUserUseFly(user)).thenReturn(true);
+        when(flightCheckManager.isIslandSpawnIsland(island)).thenReturn(true);
+
+        assertTrue(fl.checkRemoveFly(user));
+        assertFalse(flightCheckManager.isUserOp(user));
+        assertFalse(flightCheckManager.isUserCreativeOrSpectator(user));
+        assertFalse(flightCheckManager.canUserBypassFly(user));
+
+        assertTrue(flightCheckManager.canUserUseFly(user));
+        assertFalse(flightCheckManager.canUserUseTempFly(user));
+        assertTrue(flightCheckManager.isIslandSpawnIsland(island));
+        assertFalse(flightCheckManager.canUserFlySpawn(user));
+    }
+
+    @Test
+    public void testCheckRemoveFlySpawnIslandCanFly() {
+        when(User.getInstance(uuid)).thenReturn(user);
+
+        when(flightCheckManager.getIslandUserIsOn(user)).thenReturn(island);
+        when(flightCheckManager.canUserUseFly(user)).thenReturn(true);
+        when(flightCheckManager.isIslandSpawnIsland(island)).thenReturn(true);
+        when(flightCheckManager.canUserFlySpawn(user)).thenReturn(true);
+
+        assertTrue(fl.checkRemoveFly(user));
+        assertFalse(flightCheckManager.isUserOp(user));
+        assertFalse(flightCheckManager.isUserCreativeOrSpectator(user));
+        assertFalse(flightCheckManager.canUserBypassFly(user));
+
+        assertTrue(flightCheckManager.canUserUseFly(user));
+        assertFalse(flightCheckManager.canUserUseTempFly(user));
+        assertTrue(flightCheckManager.isIslandSpawnIsland(island));
+        assertTrue(flightCheckManager.canUserFlySpawn(user));
+    }
+
+    @Test
+    public void testCheckRemoveFlyNotSpawnIslandCanFly() {
+        when(User.getInstance(uuid)).thenReturn(user);
+        
+        when(flightCheckManager.getIslandUserIsOn(user)).thenReturn(island);
+        when(flightCheckManager.canUserUseFly(user)).thenReturn(true);
+        when(flightCheckManager.canUserFlySpawn(user)).thenReturn(true);
+
+        assertTrue(fl.checkRemoveFly(user));
+        assertFalse(flightCheckManager.isUserOp(user));
+        assertFalse(flightCheckManager.isUserCreativeOrSpectator(user));
+        assertFalse(flightCheckManager.canUserBypassFly(user));
+
+        assertTrue(flightCheckManager.canUserUseFly(user));
+        assertFalse(flightCheckManager.canUserUseTempFly(user));
+        assertFalse(flightCheckManager.isIslandSpawnIsland(island));
+        assertTrue(flightCheckManager.canUserFlySpawn(user));
+    }
+
+    @Test
+    public void testCheckRemoveFlyUserCannotFlyIslandLevel() {
+        when(User.getInstance(uuid)).thenReturn(user);
+
+        when(flightCheckManager.getIslandUserIsOn(user)).thenReturn(island);
+        when(flightCheckManager.canUserUseFly(user)).thenReturn(true);
+        when(flightCheckManager.isIslandSpawnIsland(island)).thenReturn(false);
+
+        assertTrue(fl.checkRemoveFly(user));
+        assertFalse(flightCheckManager.isUserOp(user));
+        assertFalse(flightCheckManager.isUserCreativeOrSpectator(user));
+        assertFalse(flightCheckManager.canUserBypassFly(user));
+
+        assertNotNull(flightCheckManager.getIslandUserIsOn(user));
+        assertTrue(flightCheckManager.canUserUseFly(user));
+        assertFalse(flightCheckManager.canUserUseTempFly(user));
+        assertFalse(flightCheckManager.canUserFlyIslandLevel(island));
+        assertFalse(flightCheckManager.canUserFlyOnIsland(island, user));
+    }
+
+    @Test
+    public void testCheckRemoveFlyUserCannotFlyOnIsland() {
+        when(User.getInstance(uuid)).thenReturn(user);
+
+        when(flightCheckManager.getIslandUserIsOn(user)).thenReturn(island);
+        when(flightCheckManager.canUserUseFly(user)).thenReturn(true);
+        when(flightCheckManager.isIslandSpawnIsland(island)).thenReturn(false);
+        when(flightCheckManager.canUserFlyIslandLevel(island)).thenReturn(true);
+
+        assertTrue(fl.checkRemoveFly(user));
+        assertFalse(flightCheckManager.isUserOp(user));
+        assertFalse(flightCheckManager.isUserCreativeOrSpectator(user));
+        assertFalse(flightCheckManager.canUserBypassFly(user));
+
+        assertNotNull(flightCheckManager.getIslandUserIsOn(user));
+        assertTrue(flightCheckManager.canUserUseFly(user));
+        assertFalse(flightCheckManager.canUserUseTempFly(user));
+        assertTrue(flightCheckManager.canUserFlyIslandLevel(island));
+        assertFalse(flightCheckManager.canUserFlyOnIsland(island, user));
+    }
+
+    @Test
+    public void testCheckRemoveFlyUserCanFlyOnIsland() {
+        when(User.getInstance(uuid)).thenReturn(user);
+
+        when(flightCheckManager.getIslandUserIsOn(user)).thenReturn(island);
+        when(flightCheckManager.canUserUseFly(user)).thenReturn(true);
+        when(flightCheckManager.isIslandSpawnIsland(island)).thenReturn(false);
+        when(flightCheckManager.canUserFlyIslandLevel(island)).thenReturn(true);
+        when(flightCheckManager.canUserFlyOnIsland(island, user)).thenReturn(true);
+
+        assertFalse(fl.checkRemoveFly(user));
+        assertFalse(flightCheckManager.isUserOp(user));
+        assertFalse(flightCheckManager.isUserCreativeOrSpectator(user));
+        assertFalse(flightCheckManager.canUserBypassFly(user));
+
+        assertNotNull(flightCheckManager.getIslandUserIsOn(user));
+        assertTrue(flightCheckManager.canUserUseFly(user));
+        assertFalse(flightCheckManager.canUserUseTempFly(user));
+        assertTrue(flightCheckManager.canUserFlyIslandLevel(island));
+        assertTrue(flightCheckManager.canUserFlyOnIsland(island, user));
+    }
+
+    @Test
+    public void testRemoveFlyPlayerInGamemodeWorldFlying() {
         when(user.getPlayer()).thenReturn(p);
         when(p.isFlying()).thenReturn(true);
 
-        when(user.hasPermission(anyString())).thenAnswer(invocation -> {
-            String permission = invocation.getArgument(0, String.class);
-            if(permission.equals("bskyblock.island.fly")
-                    || permission.equals("bskyblock.island.flyspawn")) {
-                return true;
-            }
-            return false;
-        });
-
+        when(addon.getSettings()).thenReturn(settings);
         when(settings.getFlyTimeout()).thenReturn(5);
-        when(addon.getSettings()).thenReturn(settings);
+        when(addon.getPlugin()).thenReturn(plugin);
+        when(addon.getServer()).thenReturn(server);
+        when(server.getScheduler()).thenReturn(sch);
 
-        IslandExitEvent event = mock(IslandExitEvent.class);
-        when(event.getPlayerUUID()).thenReturn(uuid);
-        fl.onExitIsland(event);
+        when(flightCheckManager.isUserWorldGamemodeWorld(user)).thenReturn(true);
+
+        fl.removeFly(user);
+
+        verify(user).sendMessage("islandfly.fly-outside-alert", TextVariables.NUMBER, String.valueOf(5));
         verify(sch).runTaskLater(eq(plugin), any(Runnable.class), eq(100L));
-        verify(user).sendMessage("islandfly.fly-outside-alert", "[number]", "5");
     }
 
-    /**
-     * Test method for {@link world.bentobox.islandfly.listeners.FlyListener#onExitIsland(world.bentobox.bentobox.api.events.island.IslandExitEvent)}.
-     */
     @Test
-    public void testOnExitIslandGraceTimeOp() {
-        // IWM
-        when(addon.getPlugin()).thenReturn(plugin);
-        when(plugin.getIWM()).thenReturn(iwm);
-        when(iwm.getPermissionPrefix(any())).thenReturn("bskyblock.");
-
-        // User/Player
-        when(user.isOp()).thenReturn(true);
-
-        // IslandExitEvent
-        IslandExitEvent event = mock(IslandExitEvent.class);
-        when(event.getPlayerUUID()).thenReturn(uuid);
-
-        // Actual test
-        fl.onExitIsland(event);
-        verify(sch, never()).runTaskLater(eq(plugin), any(Runnable.class), any(Long.class));
-        verify(p, never()).sendMessage(anyString());
-    }
-
-    /**
-     * Test method for {@link world.bentobox.islandfly.listeners.FlyListener#onExitIsland(world.bentobox.bentobox.api.events.island.IslandExitEvent)}.
-     */
-    @Test
-    public void testOnExitIslandGraceTimePermission() {
-        // IWM
-        when(addon.getPlugin()).thenReturn(plugin);
-        when(plugin.getIWM()).thenReturn(iwm);
-        when(iwm.getPermissionPrefix(any())).thenReturn("bskyblock.");
-
-        // User/Player
-        when(user.isOp()).thenReturn(false);
+    public void testRemoveFlyPlayerInGamemodeWorldNotFlying() {
         when(user.getPlayer()).thenReturn(p);
-        when(p.getGameMode()).thenReturn(GameMode.SURVIVAL);
-
-        // IslandExitEvent
-        IslandExitEvent event = mock(IslandExitEvent.class);
-        when(event.getPlayerUUID()).thenReturn(uuid);
-
-        fl.onExitIsland(event);
-        verify(sch, never()).runTaskLater(eq(plugin), any(Runnable.class), any(Long.class));
-        verify(p, never()).sendMessage(anyString());
-    }
-
-    /**
-     * Test method for {@link world.bentobox.islandfly.listeners.FlyListener#onExitIsland(world.bentobox.bentobox.api.events.island.IslandExitEvent)}.
-     */
-    @Test
-    public void testOnExitIslandGraceTimeNotFlying() {
-        when(user.getPlayer()).thenReturn(p);
-
-        // IWM
-        when(addon.getPlugin()).thenReturn(plugin);
-        when(plugin.getIWM()).thenReturn(iwm);
-        when(iwm.getPermissionPrefix(any())).thenReturn("bskyblock.");
-
-        when(p.getGameMode()).thenReturn(GameMode.SURVIVAL);
-
-        when(user.isOp()).thenReturn(false);
-
-        when(user.hasPermission(anyString())).thenAnswer(invocation -> {
-            String permission = invocation.getArgument(0, String.class);
-            if(permission.equals("bskyblock.island.fly")
-                    || permission.equals("bskyblock.island.flyspawn")) {
-                return true;
-            }
-            return false;
-        });
 
         when(addon.getSettings()).thenReturn(settings);
         when(settings.getFlyTimeout()).thenReturn(5);
+        when(addon.getPlugin()).thenReturn(plugin);
+        when(addon.getServer()).thenReturn(server);
+        when(server.getScheduler()).thenReturn(sch);
 
-        when(p.isFlying()).thenReturn(false);
-        when(user.getWorld()).thenReturn(world);
+        when(flightCheckManager.isUserWorldGamemodeWorld(user)).thenReturn(true);
 
-        IslandExitEvent event = mock(IslandExitEvent.class);
-        when(event.getPlayerUUID()).thenReturn(uuid);
-        fl.onExitIsland(event);
+        fl.removeFly(user);
 
-
+        verify(user, never()).sendMessage("islandfly.fly-outside-alert", TextVariables.NUMBER, String.valueOf(5));
         verify(sch).runTaskLater(eq(plugin), any(Runnable.class), eq(100L));
-        verify(p, never()).sendMessage("islandfly.fly-outside-alert");
     }
 
-    /**
-     * Test method for {@link world.bentobox.islandfly.listeners.FlyListener#onExitIsland(world.bentobox.bentobox.api.events.island.IslandExitEvent)}.
-     */
     @Test
-    public void testOnExitIslandNoGraceTime() {
-        // IWM
-        when(addon.getPlugin()).thenReturn(plugin);
-        when(plugin.getIWM()).thenReturn(iwm);
-        when(iwm.getPermissionPrefix(any())).thenReturn("bskyblock.");
-
-        // Island
-        when(addon.getIslands()).thenReturn(im);
-        when(im.getProtectedIslandAt(any())).thenReturn(Optional.empty());
-
-        // User/Player
+    public void testRemoveFlyPlayerNotInGamemodeWorld() {
+        when(user.getPlayer()).thenReturn(p);
         when(user.isOnline()).thenReturn(true);
-        when(user.getPlayer()).thenReturn(p);
-        when(p.isFlying()).thenReturn(true);
-        when(p.getGameMode()).thenReturn(GameMode.SURVIVAL);
-        when(p.isFlying()).thenReturn(true);
 
-        when(user.hasPermission(anyString())).thenAnswer(invocation -> {
-            String permission = invocation.getArgument(0, String.class);
-            if(permission.equals("bskyblock.island.fly")
-                    || permission.equals("bskyblock.island.flyspawn")) {
-                return true;
-            }
-            return false;
-        });
+        fl.removeFly(user);
 
-        when(addon.getSettings()).thenReturn(settings);
-        when(settings.getFlyTimeout()).thenReturn(0);
+        verify(user, never()).sendMessage("islandfly.fly-outside-alert", TextVariables.NUMBER, String.valueOf(5));
+        verify(sch, never()).runTaskLater(eq(plugin), any(Runnable.class), eq(100L));
 
-        IslandExitEvent event = mock(IslandExitEvent.class);
-        when(event.getPlayerUUID()).thenReturn(uuid);
-
-
-        fl.onExitIsland(event);
-        verify(sch, never()).runTaskLater(eq(plugin), any(Runnable.class), any(Long.class));
-        verify(user).sendMessage("islandfly.disable-fly");
-    }
-
-    /**
-     * Test method for {@link world.bentobox.islandfly.listeners.FlyListener#onExitIsland(world.bentobox.bentobox.api.events.island.IslandExitEvent)}.
-     */
-    @Test
-    public void testOnExitIslandNoPermission() {
-        // IWM
-        when(addon.getPlugin()).thenReturn(plugin);
-        when(plugin.getIWM()).thenReturn(iwm);
-        when(iwm.getPermissionPrefix(any())).thenReturn("bskyblock.");
-
-        // User/Player
-        when(user.getPlayer()).thenReturn(p);
-        when(p.getGameMode()).thenReturn(GameMode.SURVIVAL);
-
-        IslandExitEvent event = mock(IslandExitEvent.class);
-        when(event.getPlayerUUID()).thenReturn(uuid);
-
-        fl.onExitIsland(event);
-        verify(sch, never()).runTaskLater(eq(plugin), any(Runnable.class), any(Long.class));
-        verify(p, never()).sendMessage("islandfly.disable-fly");
-    }
-
-    /**
-     * Test method for {@link world.bentobox.islandfly.listeners.FlyListener#onExitIsland(world.bentobox.bentobox.api.events.island.IslandExitEvent)}.
-     */
-    @Test
-    public void testOnExitIslandNoGraceTimeCreativeOrSpectator() {
-        // IWM
-        when(addon.getPlugin()).thenReturn(plugin);
-        when(plugin.getIWM()).thenReturn(iwm);
-        when(iwm.getPermissionPrefix(any())).thenReturn("bskyblock.");
-
-        when(user.getPlayer()).thenReturn(p);
-        when(p.getGameMode()).thenReturn(GameMode.CREATIVE);
-
-        IslandExitEvent event = mock(IslandExitEvent.class);
-        when(event.getPlayerUUID()).thenReturn(uuid);
-        fl.onExitIsland(event);
-        // Spectator
-        when(p.getGameMode()).thenReturn(GameMode.SPECTATOR);
-        fl.onExitIsland(event);
-        verify(sch, never()).runTaskLater(eq(plugin), any(Runnable.class), any(Long.class));
-        verify(p, never()).sendMessage("islandfly.disable-fly");
-    }
-
-
-    /**
-     * Test method for {@link world.bentobox.islandfly.listeners.FlyListener#removeFly(world.bentobox.bentobox.api.user.User)}.
-     */
-    @Test
-    public void testRemoveFlyUserFlyingNotOnline() {
-        when(user.isOnline()).thenReturn(false);
-        assertFalse(fl.removeFly(user));
-
-    }
-
-    /**
-     * Test method for {@link world.bentobox.islandfly.listeners.FlyListener#removeFly(world.bentobox.bentobox.api.user.User)}.
-     */
-    @Test
-    public void testRemoveFlyUserFlyingOutsideProtectedIsland() {
-        // User/Player
-        when(user.isOnline()).thenReturn(true);
-        when(user.getPlayer()).thenReturn(p);
-        when(p.isFlying()).thenReturn(true);
-
-        // Island
-        // If a player is flying outside an island into unowned space, then they should have their fly removed
-        when(addon.getIslands()).thenReturn(im);
-        when(im.getProtectedIslandAt(any())).thenReturn(Optional.empty());
-
-        assertTrue(fl.removeFly(user));
+        verify(user, never()).sendMessage("islandfly.disable-fly");
+        assertFalse(flightTimeManager.isPlayerFlightTimeTracked(uuid));
+        verify(flightTimeManager, never()).stopTrackingPlayerFlightTime(p);
         verify(p).setFlying(false);
         verify(p).setAllowFlight(false);
-        verify(user).sendMessage("islandfly.disable-fly");
     }
 
-    /**
-     * Test method for {@link world.bentobox.islandfly.listeners.FlyListener#removeFly(world.bentobox.bentobox.api.user.User)}.
-     */
     @Test
-    public void testRemoveFlyUserFlyingBackInProtectedAreaOfIsland() {
-        assertFalse(fl.removeFly(user));
-    }
-
-    /**
-     * Test method for {@link world.bentobox.islandfly.listeners.FlyListener#removeFly(world.bentobox.bentobox.api.user.User)}.
-     */
-    @Test
-    public void testRemoveFlyUserFlyingInOtherIslandNotAllowed() {
-        // Island
-        when(addon.getIslands()).thenReturn(im);
-        opIsland2 = Optional.of(island2);
-        when(im.getProtectedIslandAt(any())).thenReturn(opIsland2);
-
-        // User/Player
-        when(user.getPlayer()).thenReturn(p);
+    public void testDisableFlyNormalFlyUserOnlineFlying() {
         when(user.isOnline()).thenReturn(true);
-        when(p.isFlying()).thenReturn(true);
-
-        // Settings
-        when(addon.getSettings()).thenReturn(settings);
-
-        assertTrue(fl.removeFly(user));
-        verify(p).setFlying(false);
-        verify(p).setAllowFlight(false);
-        verify(user).sendMessage("islandfly.disable-fly");
-    }
-
-    /**
-     * Test method for {@link world.bentobox.islandfly.listeners.FlyListener#removeFly(world.bentobox.bentobox.api.user.User)}.
-     */
-    @Test
-    public void testRemoveFlyUserFlyingInOtherProtectedIslandAllowed() {
-        // Island
-        when(addon.getIslands()).thenReturn(im);
-        opIsland2 = Optional.of(island2);
-        when(im.getProtectedIslandAt(any())).thenReturn(opIsland2);
-        when(island2.isAllowed(any(), any())).thenReturn(true);
-
-        // Settings
-        when(addon.getSettings()).thenReturn(settings);
-
-        // User
-        when(user.isOnline()).thenReturn(true);
-
-        assertFalse(fl.removeFly(user));
-    }
-
-    /**
-     * Test method for {@link world.bentobox.islandfly.listeners.FlyListener#removeFly(world.bentobox.bentobox.api.user.User)}.
-     */
-    @Test
-    public void testRemoveFlyUserFlyingInOwnProtectedIslandNotAllowed() {
-        // User/Player
-        when(user.isOnline()).thenReturn(true);
+        when(user.getUniqueId()).thenReturn(uuid);
         when(user.getPlayer()).thenReturn(p);
         when(p.isFlying()).thenReturn(true);
 
-        // Island
-        when(addon.getIslands()).thenReturn(im);
-        Optional<Island> opIsland = Optional.of(island);
-        when(im.getProtectedIslandAt(any())).thenReturn(opIsland);
+        fl.disableFly(user);
 
-        // Settings
-        when(addon.getSettings()).thenReturn(settings);
-
-        assertTrue(fl.removeFly(user));
+        verify(user).sendMessage("islandfly.disable-fly");
+        verify(flightTimeManager, never()).stopTrackingPlayerFlightTime(p);
         verify(p).setFlying(false);
         verify(p).setAllowFlight(false);
-        verify(user).sendMessage("islandfly.disable-fly");
     }
 
-
-    /**
-     * Test method for {@link world.bentobox.islandfly.listeners.FlyListener#removeFly(world.bentobox.bentobox.api.user.User)}.
-     */
     @Test
-    public void testRemoveFlyUserFlyingInSpawnAllowed() {
-        // IWM
-        when(addon.getPlugin()).thenReturn(plugin);
-        when(plugin.getIWM()).thenReturn(iwm);
-        Optional<GameModeAddon> opGm = Optional.of(gameMode);
-        when(gameMode.getPermissionPrefix()).thenReturn("bskyblock.");
-        when(iwm.getAddon(any())).thenReturn(opGm);
-
-        // User/Player
+    public void testDisableFlyNormalFlyUserOnlineNotFlying() {
         when(user.isOnline()).thenReturn(true);
-        when(user.hasPermission(anyString())).thenReturn(true);
+        when(user.getUniqueId()).thenReturn(uuid);
+        when(user.getPlayer()).thenReturn(p);
 
-        // Island
-        when(addon.getIslands()).thenReturn(im);
-        Optional<Island> opIsland = Optional.of(island);
-        when(im.getProtectedIslandAt(any())).thenReturn(opIsland);
-        when(island.isSpawn()).thenReturn(true);
+        fl.disableFly(user);
 
-
-        assertFalse(fl.removeFly(user));
+        verify(user, never()).sendMessage("islandfly.disable-fly");
+        verify(flightTimeManager, never()).stopTrackingPlayerFlightTime(p);
+        verify(p).setFlying(false);
+        verify(p).setAllowFlight(false);
     }
 
-    /**
-     * Test method for {@link world.bentobox.islandfly.listeners.FlyListener#removeFly(world.bentobox.bentobox.api.user.User)}.
-     */
     @Test
-    public void testRemoveFlyUserFlyingInSpawnNotAllowed() {
-        // IWM
-        when(addon.getPlugin()).thenReturn(plugin);
-        when(plugin.getIWM()).thenReturn(iwm);
-        Optional<GameModeAddon> opGm = Optional.of(gameMode);
-        when(gameMode.getPermissionPrefix()).thenReturn("bskyblock.");
-        when(iwm.getAddon(any())).thenReturn(opGm);
-
-        // Island
-        when(addon.getIslands()).thenReturn(im);
-        Optional<Island> opIsland = Optional.of(island);
-        when(im.getProtectedIslandAt(any())).thenReturn(opIsland);
-        when(island.isSpawn()).thenReturn(true);
-
-        // User/Player
+    public void testDisableFlyTempFlyUserOnlineFlying() {
         when(user.isOnline()).thenReturn(true);
-        when(user.hasPermission("bskyblock.island.flyspawn")).thenReturn(false);
+        when(user.getUniqueId()).thenReturn(uuid);
         when(user.getPlayer()).thenReturn(p);
         when(p.isFlying()).thenReturn(true);
 
+        when(flightTimeManager.isPlayerFlightTimeTracked(uuid)).thenReturn(true);
 
-        assertTrue(fl.removeFly(user));
+        fl.disableFly(user);
+
+        verify(user).sendMessage("islandfly.disable-fly");
+        verify(flightTimeManager).stopTrackingPlayerFlightTime(p);
         verify(p).setFlying(false);
         verify(p).setAllowFlight(false);
-        verify(user).sendMessage("islandfly.disable-fly");
     }
 
+    @Test
+    public void testDisableFlyTempFlyUserOnlineNotFlying() {
+        when(user.isOnline()).thenReturn(true);
+        when(user.getUniqueId()).thenReturn(uuid);
+        when(user.getPlayer()).thenReturn(p);
+
+        when(flightTimeManager.isPlayerFlightTimeTracked(uuid)).thenReturn(true);
+
+        fl.disableFly(user);
+
+        verify(user, never()).sendMessage("islandfly.disable-fly");
+        verify(flightTimeManager).stopTrackingPlayerFlightTime(p);
+        verify(p).setFlying(false);
+        verify(p).setAllowFlight(false);
+    }
+
+    @Test
+    public void testDisableFlyUserOffline() {
+        fl.disableFly(user);
+
+        verify(user, never()).sendMessage("islandfly.disable-fly");
+        verify(flightTimeManager, never()).isPlayerFlightTimeTracked(uuid);
+        verify(flightTimeManager, never()).stopTrackingPlayerFlightTime(p);
+        verify(p, never()).setFlying(false);
+        verify(p, never()).setAllowFlight(false);
+    }
 }

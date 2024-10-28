@@ -25,7 +25,6 @@ import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 
-import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import world.bentobox.bentobox.BentoBox;
 import world.bentobox.bentobox.Settings;
@@ -58,7 +57,6 @@ public class IslandFlyAddonTest {
     private GameModeAddon gameMode;
     @Mock
     private FlagsManager fm;
-    @Spy
     IslandFlyAddon addon;
 
     @BeforeEach
@@ -85,6 +83,7 @@ public class IslandFlyAddonTest {
             }
         }
 
+        addon = new IslandFlyAddon();
         File dataFolder = new File("addons/IslandFlyAddon");
         addon.setDataFolder(dataFolder);
         addon.setFile(jFile);
@@ -113,9 +112,7 @@ public class IslandFlyAddonTest {
      */
     @Test
     public void testOnEnable() {
-        when(addon.getPlugin()).thenReturn(plugin);
         when(plugin.getLogger()).thenReturn(logger);
-        when(plugin.getAddonsManager()).thenReturn(am);
 
         // Player command
         CompositeCommand cmd = mock(CompositeCommand.class);
@@ -128,9 +125,9 @@ public class IslandFlyAddonTest {
         Optional<CompositeCommand> opACmd = Optional.of(aCmd);
         when(gameMode.getAdminCommand()).thenReturn(opACmd);
 
-        when(addon.getPlugin().getFlagsManager()).thenReturn(fm);
-        when(addon.getPlugin().getAddonsManager()).thenReturn(am);
-        when(addon.getPlugin().getAddonsManager().getGameModeAddons()).thenReturn(Collections.singletonList(gameMode));
+        when(plugin.getFlagsManager()).thenReturn(fm);
+        when(plugin.getAddonsManager()).thenReturn(am);
+        when(plugin.getAddonsManager().getGameModeAddons()).thenReturn(Collections.singletonList(gameMode));
 
         AddonDescription desc2 = new AddonDescription.Builder("bentobox", "BSkyBlock", "1.3").description("test").authors("tasty").build();
         when(gameMode.getDescription()).thenReturn(desc2);
@@ -138,12 +135,12 @@ public class IslandFlyAddonTest {
         addon.onLoad();
         addon.onEnable();
 
-        verify(addon).registerFlag(any());
-        verify(addon).registerListener(any(FlyListener.class));
-        verify(addon).registerListener(any(FlyDeathListener.class));
-        verify(addon).registerListener(any(FlyLogoutListener.class));
-        verify(addon).registerListener(any(FlyLogoutListener.class));
-        verify(addon).registerListener(any(FlyFlagListener.class));
+        verify(fm).registerFlag(eq(addon), any());
+        verify(am).registerListener(eq(addon), any(FlyListener.class));
+        verify(am).registerListener(eq(addon), any(FlyDeathListener.class));
+        verify(am).registerListener(eq(addon), any(FlyLogoutListener.class));
+        verify(am).registerListener(eq(addon), any(FlyLogoutListener.class));
+        verify(am).registerListener(eq(addon), any(FlyFlagListener.class));
     }
 
     /**
@@ -155,7 +152,6 @@ public class IslandFlyAddonTest {
         when(plugin.getSettings()).thenReturn(settings);
         doReturn(DatabaseSetup.DatabaseType.JSON).when(settings).getDatabaseType();
 
-        when(addon.getPlugin()).thenReturn(plugin);
         when(plugin.getLogger()).thenReturn(logger);
         when(plugin.getAddonsManager()).thenReturn(am);
         when(addon.getPlugin().getAddonsManager().getGameModeAddons()).thenReturn(Collections.singletonList(gameMode));
@@ -164,15 +160,13 @@ public class IslandFlyAddonTest {
         when(gameMode.getDescription()).thenReturn(desc2);
 
         addon.onLoad();
-        when(addon.getSettings()).thenReturn(mock(world.bentobox.islandfly.config.Settings.class));
-        when(addon.getSettings().getDisabledGameModes()).thenReturn(Collections.singleton("BSkyBlock"));
         addon.onEnable();
 
-        verify(addon, never()).registerFlag(any());
-        verify(addon, never()).registerListener(any(FlyListener.class));
-        verify(addon, never()).registerListener(any(FlyDeathListener.class));
-        verify(addon, never()).registerListener(any(FlyLogoutListener.class));
-        verify(addon, never()).registerListener(any(FlyFlagListener.class));
+        verify(fm, never()).registerFlag(eq(addon), any());
+        verify(am, never()).registerListener(eq(addon), any(FlyListener.class));
+        verify(am, never()).registerListener(eq(addon), any(FlyDeathListener.class));
+        verify(am, never()).registerListener(eq(addon), any(FlyLogoutListener.class));
+        verify(am, never()).registerListener(eq(addon), any(FlyFlagListener.class));
     }
 
     /**
@@ -180,8 +174,6 @@ public class IslandFlyAddonTest {
      */
     @Test
     public void testOnReloadHooked() {
-        when(addon.getPlugin()).thenReturn(plugin);
-
         testOnEnable();
         addon.onReload();
         verify(plugin).log("[island fly addon] IslandFly addon reloaded.");

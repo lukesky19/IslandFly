@@ -11,6 +11,7 @@ import world.bentobox.islandfly.commands.FlyToggleCommand;
 import world.bentobox.islandfly.commands.TempFlyToggleCommand;
 import world.bentobox.islandfly.config.Settings;
 import world.bentobox.islandfly.listeners.*;
+import world.bentobox.islandfly.managers.FlightCheckManager;
 import world.bentobox.islandfly.managers.FlightTimeManager;
 import world.bentobox.level.Level;
 
@@ -52,7 +53,6 @@ public class IslandFlyAddon extends Addon {
      */
     private boolean hooked;
 
-
     /**
      * Executes code when loading the addon. This is called before {@link #onEnable()}. This should preferably
      * be used to setup configuration and worlds.
@@ -86,6 +86,7 @@ public class IslandFlyAddon extends Addon {
     @Override
     public void onEnable() {
         flightTimeManager = new FlightTimeManager(this);
+        FlightCheckManager flightCheckManager = new FlightCheckManager(this);
 
         //Hook into gamemodes
         this.getPlugin().getAddonsManager().getGameModeAddons().forEach(gameModeAddon -> {
@@ -114,7 +115,7 @@ public class IslandFlyAddon extends Addon {
 
         if(hooked) {
             // Register Listeners
-            this.registerListener(new FlyListener(this, flightTimeManager));
+            this.registerListener(new FlyListener(this, flightTimeManager, flightCheckManager));
             this.registerListener(new FlyDeathListener(this, flightTimeManager));
             this.registerListener(new FlyLogoutListener(this, flightTimeManager));
             this.registerListener(new FlyLoginListener(this, flightTimeManager));

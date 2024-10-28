@@ -1,197 +1,162 @@
 package world.bentobox.islandfly.listeners;
 
-import java.util.HashMap;
-import java.util.Map;
-
-import org.bukkit.Bukkit;
-import org.bukkit.GameMode;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
-import org.bukkit.event.player.PlayerToggleFlightEvent;
-import org.eclipse.jdt.annotation.NonNull;
 
 import world.bentobox.bentobox.api.events.island.IslandEnterEvent;
 import world.bentobox.bentobox.api.events.island.IslandExitEvent;
 import world.bentobox.bentobox.api.localization.TextVariables;
-import world.bentobox.bentobox.api.metadata.MetaDataValue;
 import world.bentobox.bentobox.api.user.User;
 import world.bentobox.bentobox.database.objects.Island;
 import world.bentobox.islandfly.IslandFlyAddon;
+import world.bentobox.islandfly.managers.FlightCheckManager;
 import world.bentobox.islandfly.managers.FlightTimeManager;
 
 /**
  * This class manages players fly ability.
  */
 public class FlyListener implements Listener {
-
-    private static final @NonNull String ISLANDFLY = "IslandFly-";
     /**
      * Addon instance object.
      */
-    final IslandFlyAddon islandFlyAddon;
+    private final IslandFlyAddon islandFlyAddon;
     /**
      * Instance of FlightTimeManager
      */
-    final FlightTimeManager flightTimeManager;
+    private final FlightTimeManager flightTimeManager;
+    private final FlightCheckManager flightCheckManager;
 
     /**
      * Constructor
-     * @param islandFlyAddon Instance of IslandFlyAddon
+     *
+     * @param islandFlyAddon    Instance of IslandFlyAddon
      * @param flightTimeManager Instance of FlightTimeManager
      */
-    public FlyListener(final IslandFlyAddon islandFlyAddon, final FlightTimeManager flightTimeManager) {
+    public FlyListener(
+            final IslandFlyAddon islandFlyAddon,
+            final FlightTimeManager flightTimeManager,
+            final FlightCheckManager flightCheckManager) {
         this.islandFlyAddon = islandFlyAddon;
         this.flightTimeManager = flightTimeManager;
+        this.flightCheckManager = flightCheckManager;
     }
 
-    /**
-     * When flight is toggled, check if the user can fly, otherwise disable flight.
-     * @param event Instance of PlayerToggleFlightEvent
-     */
-    @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
-    public void onToggleFlight(final PlayerToggleFlightEvent event) {
-        final User user = User.getInstance(event.getPlayer());
-        if(checkUser(user)) {
-            user.sendMessage("islandfly.not-allowed");
-        } else {
-            addon.getIslands().getIslandAt(user.getLocation())
-                    .filter(i -> i.getMemberSet().contains(user.getUniqueId())).ifPresent(is -> {
-                        Map<String, MetaDataValue> metaData = new HashMap<>();
-                        metaData.put("IslandFly-" + is.getUniqueId(), new MetaDataValue(event.isFlying()));
-                        user.setMetaData(metaData); // Record the fly state for this island
-                    });
-
-        }
-    }
-
-    /**
-     * Don't disable flight if user is op, in creative or spectator, or has [gamemode].island.flybypass.
-     * Otherwise, call {@link #removeFly(User)} for additional checks.
-     * @param user The BentoBox User to check if they can fly.
-     * @return <code>true</code> if fly was blocked, otherwise <code>false</code>
-     */
-    private boolean checkUser(User user) {
-        String permPrefix = islandFlyAddon.getPlugin().getIWM().getPermissionPrefix(user.getWorld());
-        // Ignore ops
-        if(user.isOp() || user.getPlayer().getGameMode().equals(GameMode.CREATIVE)
-                || user.getPlayer().getGameMode().equals(GameMode.SPECTATOR)
-                || user.hasPermission(permPrefix + "island.flybypass")) return false;
-
-        return removeFly(user);
-    }
-
-    /**
-     * When entering an island, check if the user can fly, otherwise disable flight.
-     * @param event Instance of IslandEnterEvent
-     */
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onEnterIsland(final IslandEnterEvent event) {
         final User user = User.getInstance(event.getPlayerUUID());
-        user.getMetaData(ISLANDFLY + event.getIsland().getUniqueId())
-                .ifPresent(mdv -> {
-                    user.getPlayer().setAllowFlight(true);
-                    user.getPlayer().setFlying(mdv.asBoolean());
-                });
-        // Wait until after arriving at the island
-        Bukkit.getScheduler().runTask(this.islandFlyAddon.getPlugin(), () -> checkUser(user));
+        final Island island = event.getIsland();
+
+        // Wait until player is on the Island
+        islandFlyAddon.getServer().getScheduler().runTaskLater(islandFlyAddon.getPlugin(), () -> {
+            if(checkEnableFly(user, island)) {
+                enableFlight(user);
+            }
+        }, 1L);
     }
 
-    /**
-     * When exiting an island, check if the user can fly, otherwise disable flight.
-     * @param event instance of IslandEvent.IslandExitEvent
-     */
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onExitIsland(final IslandExitEvent event) {
         final User user = User.getInstance(event.getPlayerUUID());
-        String permPrefix = islandFlyAddon.getPlugin().getIWM().getPermissionPrefix(user.getWorld());
-        // Ignore ops
-        if(user.isOp() || user.getPlayer().getGameMode().equals(GameMode.CREATIVE)
-                || user.getPlayer().getGameMode().equals(GameMode.SPECTATOR)
-                || user.hasPermission(permPrefix + "island.flybypass")
-                || ((!user.hasPermission(permPrefix + "island.fly") && !user.hasPermission(permPrefix + "island.tempfly"))
-                        && !user.hasPermission(permPrefix + "island.flyspawn"))) {
-            return;
-        }
 
-        // Alert player fly will be disabled
-        final int flyTimeout = this.islandFlyAddon.getSettings().getFlyTimeout();
-
-        // If timeout is 0 or less disable fly immediately
-        if(flyTimeout <= 0) {
-            removeFly(user);
-            return;
-        }
-
-        // Else disable fly with a delay
-        if(user.getPlayer().isFlying()) {
-            user.sendMessage("islandfly.fly-outside-alert", TextVariables.NUMBER, String.valueOf(flyTimeout));
-        }
-
-        Bukkit.getScheduler().runTaskLater(this.islandFlyAddon.getPlugin(), () -> removeFly(user), 20L* flyTimeout);
+        // Wait until player has left the Island
+        islandFlyAddon.getServer().getScheduler().runTaskLater(islandFlyAddon.getPlugin(), () -> {
+            if(checkRemoveFly(user)) {
+                removeFly(user);
+            }
+        }, 1L);
     }
 
-    /**
-     * Remove fly from a player if required.
-     * @param user The BentoBox User to check.
-     * @return <code>true</code> if fly is removed, otherwise <code>false</code>.
-     */
-    boolean removeFly(User user) {
-        // Verify player is still online
-        if (!user.isOnline()) return false;
+    public boolean checkEnableFly(User user, Island island) {
+        if (flightCheckManager.isPlayerAllowedFlight(user.getPlayer())) return false;
 
-        // Disable flight if the island is not on an island.
-        Island island = islandFlyAddon.getIslands().getProtectedIslandAt(user.getLocation()).orElse(null);
-        if(island == null) {
-            disableFly(user);
-            return true;
-        }
+        if (flightCheckManager.isIslandSpawnIsland(island) && !flightCheckManager.canUserFlySpawn(user)) return false;
 
-        // Check if player is back on a spawn island
-        if(island.isSpawn()) {
-            if(this.islandFlyAddon.getPlugin().getIWM().getAddon(user.getWorld())
-                    .map(a -> !user.hasPermission(a.getPermissionPrefix() + "island.flyspawn")).orElse(false)) {
-                disableFly(user);
-                return true;
+        if (!flightCheckManager.canUserFlyIslandLevel(island)) return false;
+
+        if (!flightCheckManager.canUserFlyOnIsland(island, user)) return false;
+
+        return flightCheckManager.canUserUseFly(user) || flightCheckManager.canUserUseTempFly(user);
+    }
+
+    public boolean checkRemoveFly(User user) {
+        // Ignore if conditions are met
+        if (flightCheckManager.isUserOp(user)) return false;
+
+        if (flightCheckManager.isUserCreativeOrSpectator(user)) return false;
+
+        if (flightCheckManager.canUserBypassFly(user)) return false;
+
+        // Remove fly if conditions are met
+        Island island = flightCheckManager.getIslandUserIsOn(user);
+        if (island == null) return true;
+
+        if (!flightCheckManager.canUserUseFly(user) && !flightCheckManager.canUserUseTempFly(user)) return true;
+
+        if (flightCheckManager.isIslandSpawnIsland(island) && !flightCheckManager.canUserFlySpawn(user)) return true;
+
+        if (!flightCheckManager.canUserFlyIslandLevel(island)) return true;
+
+        return !flightCheckManager.canUserFlyOnIsland(island, user);
+    }
+
+    // Only do timeout if in a bentobox gamemode world, otherwise disable immediately.
+    public void removeFly(User user) {
+        if(flightCheckManager.isUserWorldGamemodeWorld(user)) {
+            // Alert player fly will be disabled
+            final int flyTimeout = this.islandFlyAddon.getSettings().getFlyTimeout();
+
+            // Else disable fly with a delay
+            if (user.getPlayer().isFlying()) {
+                user.sendMessage("islandfly.fly-outside-alert", TextVariables.NUMBER, String.valueOf(flyTimeout));
             }
-            return false;
-        }
 
-        // Disable flight if the island doesn't meet the minimum island level to fly.
-        if(islandFlyAddon.getSettings().getFlyMinLevel() > 1 && islandFlyAddon.getLevelAddon() != null) {
-            if(islandFlyAddon.getLevelAddon().getIslandLevel(island.getWorld(), island.getOwner()) < islandFlyAddon.getSettings().getFlyMinLevel()) {
-                disableFly(user);
-                return false;
-            }
-        }
-
-        // Check if player is allowed to fly on the island he is at that moment
-        if(!island.isAllowed(user, IslandFlyAddon.ISLAND_FLY_PROTECTION)) {
+            islandFlyAddon.getServer().getScheduler().runTaskLater(this.islandFlyAddon.getPlugin(), () -> disableFly(user), 20L * flyTimeout);
+        } else {
+            // Else disable fly immediately.
             disableFly(user);
-            return true;
         }
-
-        return false;
     }
 
     /**
      * Disable player fly and alert it.
+     *
      * @param user The BentoBox User to disable flight for.
      */
-    private void disableFly(final User user) {
+    public void disableFly(final User user) {
+        if (!user.isOnline()) return;
+
         final Player player = user.getPlayer();
         // If the user is flying, send a message that their flight is being disabled.
-        if(player.isFlying())
+        if (player.isFlying())
             user.sendMessage("islandfly.disable-fly");
 
         // If player is using temporary flight, stop tracking their flight time.
-        if(flightTimeManager.isPlayerFlightTimeTracked(user.getUniqueId())) {
+        if (flightTimeManager.isPlayerFlightTimeTracked(user.getUniqueId())) {
             flightTimeManager.stopTrackingPlayerFlightTime(player);
         }
 
         // Disable flight
         player.setFlying(false);
         player.setAllowFlight(false);
+    }
+
+    public boolean enableFlight(User user) {
+        final Player player = user.getPlayer();
+
+        if((flightCheckManager.canUserUseFly(user) && flightCheckManager.canUserUseTempFly(user))
+                || flightCheckManager.canUserUseFly(user)) {
+            player.setAllowFlight(true);
+            user.sendMessage("islandfly.enable-fly");
+            return true;
+        } else if(flightCheckManager.canUserUseTempFly(user)) {
+            flightTimeManager.trackPlayerFlightTime(player);
+            player.setAllowFlight(true);
+            user.sendMessage("islandfly.enable-fly");
+            return true;
+        }
+
+        return false;
     }
 }
