@@ -1,5 +1,6 @@
 package world.bentobox.islandfly.listeners;
 
+import net.ess3.api.events.FlyStatusChangeEvent;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -43,6 +44,25 @@ public class FlyListener implements Listener {
         this.flightCheckManager = flightCheckManager;
     }
 
+    /**
+     * Event to handle cases of other fly plugins toggling flight
+     * Mostly ensures temporary flight tracking is disabled in such cases.
+     * @param event A PlayerToggleFlightEvent
+     */
+    @EventHandler
+    public void onFlyToggle(FlyStatusChangeEvent event) {
+        Player player = event.getAffected().getBase();
+        System.out.println("FlyStatusChangeEvent");
+
+        if(!event.getValue()) {
+            System.out.println("Player Not Allowed Fly | FlyStatusChangeEvent");
+            if(flightTimeManager.isPlayerFlightTimeTracked(player.getUniqueId())) {
+                System.out.println("Stopping Flight Tracking | FlyStatusChangeEvent");
+                flightTimeManager.stopTrackingPlayerFlightTime(player);
+            }
+        }
+    }
+
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onEnterIsland(final IslandEnterEvent event) {
         final User user = User.getInstance(event.getPlayerUUID());
@@ -60,7 +80,7 @@ public class FlyListener implements Listener {
     public void onExitIsland(final IslandExitEvent event) {
         final User user = User.getInstance(event.getPlayerUUID());
 
-        // Wait until player has left the Island
+        // Wait until player is on the Island
         islandFlyAddon.getServer().getScheduler().runTaskLater(islandFlyAddon.getPlugin(), () -> {
             if(checkRemoveFly(user)) {
                 removeFly(user);
@@ -145,12 +165,13 @@ public class FlyListener implements Listener {
     public boolean enableFlight(User user) {
         final Player player = user.getPlayer();
 
-        if((flightCheckManager.canUserUseFly(user) && flightCheckManager.canUserUseTempFly(user))
-                || flightCheckManager.canUserUseFly(user)) {
+        if(flightCheckManager.canUserUseFly(user)) {
+            System.out.println("Regular Flight | enableFlight");
             player.setAllowFlight(true);
             user.sendMessage("islandfly.enable-fly");
             return true;
         } else if(flightCheckManager.canUserUseTempFly(user)) {
+            System.out.println("Temp Flight | enableFlight");
             flightTimeManager.trackPlayerFlightTime(player);
             player.setAllowFlight(true);
             user.sendMessage("islandfly.enable-fly");

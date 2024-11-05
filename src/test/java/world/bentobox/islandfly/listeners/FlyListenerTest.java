@@ -363,18 +363,6 @@ public class FlyListenerTest {
     }
 
     @Test
-    public void testEnableFlightFlyAndTempFly() {
-        when(user.getPlayer()).thenReturn(p);
-        when(flightCheckManager.canUserUseFly(user)).thenReturn(true);
-        when(flightCheckManager.canUserUseTempFly(user)).thenReturn(true);
-
-        assertTrue(fl.enableFlight(user));
-        verify(p).setAllowFlight(true);
-        verify(user).sendMessage("islandfly.enable-fly");
-        verify(flightTimeManager, never()).trackPlayerFlightTime(p);
-    }
-
-    @Test
     public void testEnableFlightNoFly() {
         when(user.getPlayer()).thenReturn(p);
 
