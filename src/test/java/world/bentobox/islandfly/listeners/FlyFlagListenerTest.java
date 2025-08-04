@@ -11,7 +11,6 @@ import java.util.List;
 import java.util.UUID;
 
 import org.bukkit.Bukkit;
-import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Player.Spigot;
 import org.bukkit.scheduler.BukkitScheduler;
@@ -82,22 +81,14 @@ public class FlyFlagListenerTest {
 
         // Players/Users
         when(p1.getUniqueId()).thenReturn(UUID.randomUUID());
-        when(p1.spigot()).thenReturn(spigot);
         User.getInstance(p1);
         when(p2.getUniqueId()).thenReturn(UUID.randomUUID());
-        when(p1.isFlying()).thenReturn(true);
         when(p2.getUniqueId()).thenReturn(UUID.randomUUID());
-        when(p2.spigot()).thenReturn(spigot);
         User.getInstance(p2);
         when(p3.getUniqueId()).thenReturn(UUID.randomUUID());
-        when(p2.isFlying()).thenReturn(true);
-        when(p2.isOnline()).thenReturn(true);
-        when(p2.getLocation()).thenReturn(mock(Location.class));
         when(p3.getUniqueId()).thenReturn(UUID.randomUUID());
-        when(p3.spigot()).thenReturn(spigot);
         User.getInstance(p3);
         when(op.getUniqueId()).thenReturn(UUID.randomUUID());
-        when(op.spigot()).thenReturn(spigot);
         User.getInstance(op);
         
         ffl = new FlyFlagListener(addon, flightTimeManager);
@@ -145,6 +136,7 @@ public class FlyFlagListenerTest {
 
         // Player 2
         when(p2.isFlying()).thenReturn(true);
+        when(p2.spigot()).thenReturn(spigot);
 
         // Settings
         when(addon.getSettings()).thenReturn(settings);
@@ -188,6 +180,7 @@ public class FlyFlagListenerTest {
 
         // Player 2
         when(p2.isFlying()).thenReturn(true);
+        when(p2.spigot()).thenReturn(spigot);
 
         // Settings
         when(addon.getSettings()).thenReturn(settings);
@@ -219,6 +212,7 @@ public class FlyFlagListenerTest {
     @Test
     public void testDisableAllowedAgain() {
         when(p2.isOnline()).thenReturn(true);
+        when(p2.spigot()).thenReturn(spigot);
 
         // lm
         LocalesManager lm = mock(LocalesManager.class);
@@ -240,6 +234,8 @@ public class FlyFlagListenerTest {
     @Test
     public void testDisable() {
         when(p2.isOnline()).thenReturn(true);
+        when(p2.spigot()).thenReturn(spigot);
+
         when(island.isAllowed(any(), any())).thenReturn(false);
         when(island.onIsland(p2.getLocation())).thenReturn(true);
 
@@ -258,7 +254,7 @@ public class FlyFlagListenerTest {
 
     /**
      * Check that spigot sent the message
-     * @param message - message to check
+     * @param expectedMessage - message to check
      */
     public void checkSpigotMessage(String expectedMessage) {
         checkSpigotMessage(expectedMessage, 1);
@@ -280,8 +276,6 @@ public class FlyFlagListenerTest {
                 .count(); // Count how many times the expected message appears
 
         // Assert that the number of occurrences matches the expectedOccurrences
-        assertEquals("Expected message occurrence mismatch: " + expectedMessage, expectedOccurrences,
-                actualOccurrences);
+        assertEquals(expectedOccurrences, actualOccurrences, "Expected message occurrence mismatch: " + expectedMessage);
     }
-
 }
