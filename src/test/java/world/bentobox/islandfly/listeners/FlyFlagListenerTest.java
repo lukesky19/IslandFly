@@ -1,5 +1,6 @@
 package world.bentobox.islandfly.listeners;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -10,9 +11,12 @@ import java.util.List;
 import java.util.UUID;
 
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Player.Spigot;
 import org.bukkit.scheduler.BukkitScheduler;
 import org.eclipse.jdt.annotation.NonNull;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,6 +26,7 @@ import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.stubbing.Answer;
 
+import net.md_5.bungee.api.chat.TextComponent;
 import world.bentobox.bentobox.BentoBox;
 import world.bentobox.bentobox.api.events.flags.FlagProtectionChangeEvent;
 import world.bentobox.bentobox.api.flags.Flag;
@@ -62,6 +67,8 @@ public class FlyFlagListenerTest {
     private Island island;
     @Mock
     FlightTimeManager flightTimeManager;
+    @Mock
+    private Spigot spigot;
 
     MockedStatic<Bukkit> mockedBukkitClass;
 
@@ -75,15 +82,25 @@ public class FlyFlagListenerTest {
 
         // Players/Users
         when(p1.getUniqueId()).thenReturn(UUID.randomUUID());
+        when(p1.spigot()).thenReturn(spigot);
         User.getInstance(p1);
         when(p2.getUniqueId()).thenReturn(UUID.randomUUID());
+        when(p1.isFlying()).thenReturn(true);
+        when(p2.getUniqueId()).thenReturn(UUID.randomUUID());
+        when(p2.spigot()).thenReturn(spigot);
         User.getInstance(p2);
         when(p3.getUniqueId()).thenReturn(UUID.randomUUID());
+        when(p2.isFlying()).thenReturn(true);
+        when(p2.isOnline()).thenReturn(true);
+        when(p2.getLocation()).thenReturn(mock(Location.class));
+        when(p3.getUniqueId()).thenReturn(UUID.randomUUID());
+        when(p3.spigot()).thenReturn(spigot);
         User.getInstance(p3);
         when(op.getUniqueId()).thenReturn(UUID.randomUUID());
+        when(op.spigot()).thenReturn(spigot);
         User.getInstance(op);
         
-        ffl = new FlyFlagListener(addon,flightTimeManager);
+        ffl = new FlyFlagListener(addon, flightTimeManager);
     }
 
     @AfterEach
@@ -145,7 +162,7 @@ public class FlyFlagListenerTest {
 
         ffl.onFlagChange(e);
         verify(p1, never()).sendMessage(anyString());
-        verify(p2).sendMessage(eq("islandfly.fly-turning-off-alert"));
+        this.checkSpigotMessage("islandfly.fly-turning-off-alert");
         verify(p3, never()).sendMessage(anyString());
         verify(op, never()).sendMessage(anyString());
         verify(scheduler).runTaskLater(eq(plugin), any(Runnable.class), eq(100L));
@@ -187,13 +204,13 @@ public class FlyFlagListenerTest {
 
         ffl.onFlagChange(e);
         verify(p1, never()).sendMessage(anyString());
-        verify(p2).sendMessage(eq("islandfly.fly-turning-off-alert"));
+        this.checkSpigotMessage("islandfly.fly-turning-off-alert");
         verify(p3, never()).sendMessage(anyString());
         verify(op, never()).sendMessage(anyString());
         
         verify(p2).setFlying(false);
         verify(p2).setAllowFlight(false);
-        verify(p2).sendMessage("islandfly.disable-fly");
+        checkSpigotMessage("islandfly.disable-fly");
     }
 
     /**
@@ -214,7 +231,7 @@ public class FlyFlagListenerTest {
 
         when(island.isAllowed(any(), any())).thenReturn(true);
         ffl.disable(p2, User.getInstance(p2), island);
-        verify(p2).sendMessage(eq("islandfly.reallowed-fly"));
+        checkSpigotMessage("islandfly.reallowed-fly");
     }
     
     /**
@@ -236,6 +253,35 @@ public class FlyFlagListenerTest {
         when(phm.replacePlaceholders(any(), anyString())).thenAnswer((Answer<String>) invocation -> invocation.getArgument(1, String.class));
 
         ffl.disable(p2, User.getInstance(p2), island);
-        verify(p2).sendMessage(eq("islandfly.disable-fly"));
+        this.checkSpigotMessage("islandfly.disable-fly");
     }
+
+    /**
+     * Check that spigot sent the message
+     * @param message - message to check
+     */
+    public void checkSpigotMessage(String expectedMessage) {
+        checkSpigotMessage(expectedMessage, 1);
+    }
+
+    public void checkSpigotMessage(String expectedMessage, int expectedOccurrences) {
+        // Capture the argument passed to spigot().sendMessage(...) if messages are sent
+        ArgumentCaptor<TextComponent> captor = ArgumentCaptor.forClass(TextComponent.class);
+
+        // Verify that sendMessage() was called at least 0 times (capture any sent messages)
+        verify(spigot, atLeast(0)).sendMessage(captor.capture());
+
+        // Get all captured TextComponents
+        List<TextComponent> capturedMessages = captor.getAllValues();
+
+        // Count the number of occurrences of the expectedMessage in the captured messages
+        long actualOccurrences = capturedMessages.stream().map(component -> component.toLegacyText()) // Convert each TextComponent to plain text
+                .filter(messageText -> messageText.contains(expectedMessage)) // Check if the message contains the expected text
+                .count(); // Count how many times the expected message appears
+
+        // Assert that the number of occurrences matches the expectedOccurrences
+        assertEquals("Expected message occurrence mismatch: " + expectedMessage, expectedOccurrences,
+                actualOccurrences);
+    }
+
 }

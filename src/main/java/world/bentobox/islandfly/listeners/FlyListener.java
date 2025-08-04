@@ -1,11 +1,11 @@
 package world.bentobox.islandfly.listeners;
 
-import net.ess3.api.events.FlyStatusChangeEvent;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 
+import org.bukkit.event.player.PlayerToggleFlightEvent;
 import world.bentobox.bentobox.api.events.island.IslandEnterEvent;
 import world.bentobox.bentobox.api.events.island.IslandExitEvent;
 import world.bentobox.bentobox.api.localization.TextVariables;
@@ -14,6 +14,8 @@ import world.bentobox.bentobox.database.objects.Island;
 import world.bentobox.islandfly.IslandFlyAddon;
 import world.bentobox.islandfly.managers.FlightCheckManager;
 import world.bentobox.islandfly.managers.FlightTimeManager;
+
+import java.util.UUID;
 
 /**
  * This class manages players fly ability.
@@ -50,11 +52,14 @@ public class FlyListener implements Listener {
      * @param event A PlayerToggleFlightEvent
      */
     @EventHandler
-    public void onFlyToggle(FlyStatusChangeEvent event) {
-        Player player = event.getAffected().getBase();
+    public void onFlyToggle(PlayerToggleFlightEvent event) {
+        final Player player = event.getPlayer();
+        final User user = User.getInstance(player);
+        final UUID uuid = user.getUniqueId();
+        final boolean flightStatus = event.isFlying();
 
-        if(!event.getValue()) {
-            if(flightTimeManager.isPlayerFlightTimeTracked(player.getUniqueId())) {
+        if(!flightStatus) {
+            if(flightTimeManager.isPlayerFlightTimeTracked(uuid)) {
                 flightTimeManager.stopTrackingPlayerFlightTime(player);
             }
         }

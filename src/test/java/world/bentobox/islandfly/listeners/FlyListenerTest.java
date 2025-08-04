@@ -4,6 +4,10 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.util.UUID;
 
@@ -525,7 +529,7 @@ public class FlyListenerTest {
     @Test
     public void testCheckRemoveFlyNotSpawnIslandCanFly() {
         when(User.getInstance(uuid)).thenReturn(user);
-        
+
         when(flightCheckManager.getIslandUserIsOn(user)).thenReturn(island);
         when(flightCheckManager.canUserUseFly(user)).thenReturn(true);
         when(flightCheckManager.canUserFlySpawn(user)).thenReturn(true);
