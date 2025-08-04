@@ -10,9 +10,7 @@ import world.bentobox.bentobox.database.Database;
 import world.bentobox.islandfly.IslandFlyAddon;
 import world.bentobox.islandfly.database.object.IslandFlyPlayerData;
 
-import javax.annotation.CheckForNull;
 import java.util.HashMap;
-import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -40,9 +38,9 @@ public class FlightTimeManager {
      * Constructor
      * @param islandFlyAddon Instance of IslandFlyAddon
      */
-    public FlightTimeManager(IslandFlyAddon islandFlyAddon) {
+    public FlightTimeManager(IslandFlyAddon islandFlyAddon, Database<IslandFlyPlayerData> islandFlyPlayerDatabase) {
         this.islandFlyAddon = islandFlyAddon;
-        this.islandFlyPlayerDatabase = new Database<>(islandFlyAddon, IslandFlyPlayerData.class);
+        this.islandFlyPlayerDatabase = islandFlyPlayerDatabase;
     }
 
     /**
@@ -192,8 +190,7 @@ public class FlightTimeManager {
      * @param uuid The UUID of the player to retrieve flight data for.
      * @return The player's flight data or null if no data exists.
      */
-    @Nullable
-    public IslandFlyPlayerData getPlayerFlightData(UUID uuid) {
+    public @Nullable IslandFlyPlayerData getPlayerFlightData(UUID uuid) {
         if(islandFlyPlayerDatabase.objectExists(uuid.toString())) {
             return islandFlyPlayerDatabase.loadObject(uuid.toString());
         } else {
@@ -201,8 +198,7 @@ public class FlightTimeManager {
         }
     }
 
-    @CheckForNull
-    public Integer getActivePlayerFlightTime(UUID uuid) {
+    public @Nullable Integer getActivePlayerFlightTime(UUID uuid) {
         return activePlayerFlightTime.get(uuid);
     }
 
@@ -214,7 +210,12 @@ public class FlightTimeManager {
         UUID uuid = player.getUniqueId();
         User user = User.getInstance(player);
 
-        activePlayerFlightTime.put(uuid, Objects.requireNonNull(getPlayerFlightData(uuid)).getTimeSeconds());
+        IslandFlyPlayerData islandFlyPlayerData = getPlayerFlightData(uuid);
+        if(islandFlyPlayerData == null) {
+            throw new RuntimeException("Unable to track flight time due to null player data.");
+        }
+
+        activePlayerFlightTime.put(uuid, islandFlyPlayerData.getTimeSeconds());
         BukkitTask task = new BukkitRunnable() {
             @Override
             public void run() {

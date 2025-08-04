@@ -1,20 +1,19 @@
 package world.bentobox.islandfly.managers;
 
-import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
-import org.bukkit.scheduler.BukkitScheduler;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 import world.bentobox.bentobox.BentoBox;
 import world.bentobox.bentobox.Settings;
+import world.bentobox.bentobox.database.Database;
 import world.bentobox.bentobox.database.DatabaseSetup;
 import world.bentobox.islandfly.IslandFlyAddon;
+import world.bentobox.islandfly.database.object.IslandFlyPlayerData;
 
 import java.io.File;
 import java.io.IOException;
@@ -24,6 +23,7 @@ import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -44,7 +44,6 @@ public class FlightTimeManagerTest {
     Player player;
 
     UUID uuid;
-    static MockedStatic<Bukkit> mockedBukkitClass;
     static FlightTimeManager flightTimeManager;
 
     @BeforeAll
@@ -62,7 +61,8 @@ public class FlightTimeManagerTest {
         when(plugin.getSettings()).thenReturn(settings);
         doReturn(DatabaseSetup.DatabaseType.JSON).when(settings).getDatabaseType();
 
-        flightTimeManager = new FlightTimeManager(addon);
+        Database<IslandFlyPlayerData> islandFlyPlayerDatabase = new Database<>(addon, IslandFlyPlayerData.class);
+        flightTimeManager = new FlightTimeManager(addon, islandFlyPlayerDatabase);
     }
 
     @BeforeEach
@@ -73,17 +73,20 @@ public class FlightTimeManagerTest {
     }
 
     @AfterEach
-    public void cleanUp() throws IOException {
+    public void cleanUp() {
         deleteAll(new File("database"));
         deleteAll(new File("database_backup"));
     }
 
-    private void deleteAll(File file) throws IOException {
-        if (file.exists()) {
-            Files.walk(file.toPath())
-                    .sorted(Comparator.reverseOrder())
-                    .map(Path::toFile)
-                    .forEach(File::delete);
+    private void deleteAll(File file) {
+        if(file.exists()) {
+            try(Stream<Path> paths = Files.walk(file.toPath())) {
+                paths.sorted(Comparator.reverseOrder())
+                        .map(Path::toFile)
+                        .forEach(File::delete);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
         }
     }
 

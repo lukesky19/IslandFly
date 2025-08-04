@@ -4,12 +4,14 @@ import org.bukkit.Material;
 import world.bentobox.bentobox.api.addons.Addon;
 import world.bentobox.bentobox.api.configuration.Config;
 import world.bentobox.bentobox.api.flags.Flag;
+import world.bentobox.bentobox.database.Database;
 import world.bentobox.bentobox.managers.RanksManager;
 import world.bentobox.islandfly.commands.FlightTimeAdminCommand;
 import world.bentobox.islandfly.commands.FlightTimePlayerCommand;
 import world.bentobox.islandfly.commands.FlyToggleCommand;
 import world.bentobox.islandfly.commands.TempFlyToggleCommand;
 import world.bentobox.islandfly.config.Settings;
+import world.bentobox.islandfly.database.object.IslandFlyPlayerData;
 import world.bentobox.islandfly.listeners.*;
 import world.bentobox.islandfly.managers.FlightCheckManager;
 import world.bentobox.islandfly.managers.FlightTimeManager;
@@ -85,8 +87,9 @@ public class IslandFlyAddon extends Addon {
      */
     @Override
     public void onEnable() {
-        flightTimeManager = new FlightTimeManager(this);
-        FlightCheckManager flightCheckManager = new FlightCheckManager(this);
+        Database<IslandFlyPlayerData> islandFlyPlayerDatabase = new Database<>(this, IslandFlyPlayerData.class);
+        flightTimeManager = new FlightTimeManager(this, islandFlyPlayerDatabase);
+        FlightCheckManager flightCheckManager = new FlightCheckManager(this, islandFlyPlayerDatabase);
 
         //Hook into gamemodes
         this.getPlugin().getAddonsManager().getGameModeAddons().forEach(gameModeAddon -> {
