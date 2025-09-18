@@ -3,9 +3,9 @@ package world.bentobox.islandfly.commands;
 import world.bentobox.bentobox.api.commands.CompositeCommand;
 import world.bentobox.bentobox.api.localization.TextVariables;
 import world.bentobox.bentobox.api.user.User;
-import world.bentobox.islandfly.IslandFlyAddon;
 import world.bentobox.islandfly.database.object.IslandFlyPlayerData;
-import world.bentobox.islandfly.managers.FlightTimeManager;
+import world.bentobox.islandfly.managers.PlayerDataManager;
+import world.bentobox.islandfly.util.FormatUtil;
 
 import java.util.List;
 import java.util.UUID;
@@ -15,24 +15,18 @@ import java.util.UUID;
  */
 public class FlightTimePlayerCommand extends CompositeCommand {
     /**
-     * Instance of IslandFlyAddon
-     */
-    final IslandFlyAddon addon;
-    /**
      * Instance of FlightTimeManager
      */
-    final FlightTimeManager flightTimeManager;
+    private final PlayerDataManager playerDataManager;
 
     /**
      * Constructor
      * @param parent Instance of CompositeCommand
-     * @param addon Instance of IslandFlyAddon
-     * @param flightTimeManager Instance of FlightTimeManager
+     * @param playerDataManager Instance of FlightTimeManager
      */
-    public FlightTimePlayerCommand(CompositeCommand parent, IslandFlyAddon addon, FlightTimeManager flightTimeManager) {
+    public FlightTimePlayerCommand(CompositeCommand parent, PlayerDataManager playerDataManager) {
         super(parent, "flighttime");
-        this.addon = addon;
-        this.flightTimeManager = flightTimeManager;
+        this.playerDataManager = playerDataManager;
     }
 
     /**
@@ -55,21 +49,11 @@ public class FlightTimePlayerCommand extends CompositeCommand {
      */
     @Override
     public boolean execute(User user, String label, List<String> args) {
-        // Get the user's flight data and verify it exists and is valid.
-        // If not, just tell them it is 0 even though no data exists for them.
         UUID uuid = user.getUniqueId();
-        IslandFlyPlayerData data = flightTimeManager.getPlayerFlightData(uuid);
-        if(data == null) {
-            user.sendMessage("islandfly.commands.player.flighttime.flight-time", TextVariables.NUMBER, String.valueOf(0));
-            return false;
-        }
+        IslandFlyPlayerData islandFlyPlayerData = playerDataManager.getPlayerFlightData(uuid);
 
         // Send the user the amount of flight time they have.
-        if(flightTimeManager.isPlayerFlightTimeTracked(uuid)) {
-            user.sendMessage("islandfly.commands.player.flighttime.flight-time", TextVariables.NUMBER, String.valueOf(flightTimeManager.getActivePlayerFlightTime(uuid)));
-        } else {
-            user.sendMessage("islandfly.commands.player.flighttime.flight-time", TextVariables.NUMBER, String.valueOf(data.getTimeSeconds()));
-        }
+        user.sendMessage("islandfly.commands.player.flighttime.flight-time", TextVariables.NUMBER, FormatUtil.formatTimeSeconds(islandFlyPlayerData.getTimeSeconds()));
 
         return true;
     }

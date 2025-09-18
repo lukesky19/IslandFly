@@ -1,39 +1,35 @@
 package world.bentobox.islandfly.commands;
 
 import org.bukkit.entity.Player;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import world.bentobox.bentobox.api.commands.CompositeCommand;
 import world.bentobox.bentobox.api.localization.TextVariables;
 import world.bentobox.bentobox.api.user.User;
 import world.bentobox.islandfly.IslandFlyAddon;
 import world.bentobox.islandfly.database.object.IslandFlyPlayerData;
-import world.bentobox.islandfly.managers.FlightTimeManager;
+import world.bentobox.islandfly.managers.PlayerDataManager;
+import world.bentobox.islandfly.util.FormatUtil;
 
 import java.util.List;
-import java.util.Objects;
 
 /**
  * This command allows admins to set, add, remove, delete, and get a player's flight time.
  */
 public class FlightTimeAdminCommand extends CompositeCommand {
-    /**
-     * Instance of IslandFlyAddon
-     */
-    final IslandFlyAddon addon;
-    /**
-     * Instance of FlightTimeManager
-     */
-    final FlightTimeManager flightTimeManager;
+    private final IslandFlyAddon addon;
+    private final @NotNull PlayerDataManager playerDataManager;
 
     /**
      * Constructor
      * @param parent Instance of CompositeCommand
      * @param addon Instance of IslandFlyAddon
-     * @param flightTimeManager Instance of FlightTimeManager
+     * @param playerDataManager Instance of PlayerDataManager
      */
-    public FlightTimeAdminCommand(CompositeCommand parent, IslandFlyAddon addon, FlightTimeManager flightTimeManager) {
+    public FlightTimeAdminCommand(CompositeCommand parent, IslandFlyAddon addon, @NotNull PlayerDataManager playerDataManager) {
         super(parent, "flighttime");
         this.addon = addon;
-        this.flightTimeManager = flightTimeManager;
+        this.playerDataManager = playerDataManager;
     }
 
     /**
@@ -62,13 +58,16 @@ public class FlightTimeAdminCommand extends CompositeCommand {
                 case "add" -> {
                     // Verify player is valid.
                     Player player = addon.getServer().getPlayer(args.get(1));
-                    if(Objects.equals(player, null)) {
+                    if(player == null) {
                         user.sendMessage("islandfly.commands.admin.flighttime.invalid-player");
                         return false;
                     }
 
                     // Get BentoBox User for that player.
                     User targetUser = User.getInstance(player);
+
+                    // Get the IslandFlyPlayerData for the player
+                    IslandFlyPlayerData islandFlyPlayerData = playerDataManager.getPlayerFlightData(player.getUniqueId());
 
                     // Verify the time provided is valid.
                     Integer timeSeconds = parseInteger(args.get(2));
@@ -78,24 +77,30 @@ public class FlightTimeAdminCommand extends CompositeCommand {
                     }
 
                     // Add the flight time to the player.
-                    int updatedTime = flightTimeManager.addPlayerFlightTime(player, timeSeconds);
+                    islandFlyPlayerData.addTimeSeconds(timeSeconds);
                     // Send the command sender that the flight time was added successfully.
-                    user.sendMessage("islandfly.commands.admin.flighttime.add-success", TextVariables.NUMBER, String.valueOf(updatedTime));
+                    user.sendMessage("islandfly.commands.admin.flighttime.add-success", TextVariables.NUMBER, String.valueOf(islandFlyPlayerData.getTimeSeconds()));
                     // Send the target user that their flight time was changed with the updated number.
-                    targetUser.sendMessage("islandfly.flight-time-changed", TextVariables.NUMBER, String.valueOf(updatedTime));
+                    targetUser.sendMessage("islandfly.flight-time-changed", TextVariables.NUMBER, String.valueOf(islandFlyPlayerData.getTimeSeconds()));
+
+                    playerDataManager.savePlayerData(islandFlyPlayerData);
+
                     return true;
                 }
 
                 case "set" -> {
                     // Verify player is valid.
                     Player player = addon.getServer().getPlayer(args.get(1));
-                    if(Objects.equals(player, null)) {
+                    if(player == null) {
                         user.sendMessage("islandfly.commands.admin.flighttime.invalid-player");
                         return false;
                     }
 
                     // Get BentoBox User for that player.
                     User targetUser = User.getInstance(player);
+
+                    // Get the IslandFlyPlayerData for the player
+                    IslandFlyPlayerData islandFlyPlayerData = playerDataManager.getPlayerFlightData(player.getUniqueId());
 
                     // Verify the time provided is valid.
                     Integer timeSeconds = parseInteger(args.get(2));
@@ -105,24 +110,30 @@ public class FlightTimeAdminCommand extends CompositeCommand {
                     }
 
                     // Set the flight time for the player.
-                    int updatedTime = flightTimeManager.setPlayerFlightTime(player, timeSeconds);
+                    islandFlyPlayerData.setTimeSeconds(timeSeconds);
                     // Send the command sender that the flight time was set successfully.
-                    user.sendMessage("islandfly.commands.admin.flighttime.set-success", TextVariables.NUMBER, String.valueOf(updatedTime));
+                    user.sendMessage("islandfly.commands.admin.flighttime.set-success", TextVariables.NUMBER, String.valueOf(islandFlyPlayerData.getTimeSeconds()));
                     // Send the target user that their flight time was changed with the updated number.
-                    targetUser.sendMessage("islandfly.flight-time-changed", TextVariables.NUMBER, String.valueOf(updatedTime));
+                    targetUser.sendMessage("islandfly.flight-time-changed", TextVariables.NUMBER, String.valueOf(islandFlyPlayerData.getTimeSeconds()));
+
+                    playerDataManager.savePlayerData(islandFlyPlayerData);
+
                     return true;
                 }
 
                 case "remove" -> {
                     // Verify player is valid.
                     Player player = addon.getServer().getPlayer(args.get(1));
-                    if(Objects.equals(player, null)) {
+                    if(player == null) {
                         user.sendMessage("islandfly.commands.admin.flighttime.invalid-player");
                         return false;
                     }
 
                     // Get BentoBox User for that player.
                     User targetUser = User.getInstance(player);
+
+                    // Get the IslandFlyPlayerData for the player
+                    IslandFlyPlayerData islandFlyPlayerData = playerDataManager.getPlayerFlightData(player.getUniqueId());
 
                     // Verify the time provided is valid.
                     Integer timeSeconds = parseInteger(args.get(2));
@@ -132,11 +143,14 @@ public class FlightTimeAdminCommand extends CompositeCommand {
                     }
 
                     // Remove the flight time from the player.
-                    int updatedTime = flightTimeManager.removePlayerFlightTime(player, timeSeconds);
+                    islandFlyPlayerData.removeTimeSeconds(timeSeconds);
                     // Send the command sender that the flight time was removed successfully.
-                    user.sendMessage("islandfly.commands.admin.flighttime.remove-success", TextVariables.NUMBER, String.valueOf(updatedTime));
+                    user.sendMessage("islandfly.commands.admin.flighttime.remove-success", TextVariables.NUMBER, String.valueOf(islandFlyPlayerData.getTimeSeconds()));
                     // Send the target user that their flight time was changed with the updated number.
-                    targetUser.sendMessage("islandfly.flight-time-changed", TextVariables.NUMBER, String.valueOf(updatedTime));
+                    targetUser.sendMessage("islandfly.flight-time-changed", TextVariables.NUMBER, String.valueOf(islandFlyPlayerData.getTimeSeconds()));
+
+                    playerDataManager.savePlayerData(islandFlyPlayerData);
+
                     return true;
                 }
             }
@@ -145,26 +159,23 @@ public class FlightTimeAdminCommand extends CompositeCommand {
                 case "get" -> {
                     // Verify player is valid.
                     Player player = addon.getServer().getPlayer(args.get(1));
-                    if(Objects.equals(player, null)) {
+                    if(player == null) {
                         user.sendMessage("islandfly.commands.admin.flighttime.invalid-player");
                         return false;
                     }
 
                     // Verify flight data exists for the player.
-                    IslandFlyPlayerData data = flightTimeManager.getPlayerFlightData(player.getUniqueId());
-                    if(data == null) {
-                        user.sendMessage("islandfly.commands.admin.flighttime.no-flight-data");
-                        return false;
-                    }
+                    IslandFlyPlayerData data = playerDataManager.getPlayerFlightData(player.getUniqueId());
 
                     // Send the command sender the flight time for the requested player.
-                    user.sendMessage("islandfly.commands.admin.flighttime.flight-time", TextVariables.NUMBER, String.valueOf(data.getTimeSeconds()));
+                    user.sendMessage("islandfly.commands.admin.flighttime.flight-time", TextVariables.NUMBER, FormatUtil.formatTimeSeconds(data.getTimeSeconds()));
                     return true;
                 }
+
                 case "delete" -> {
                     // Verify player is valid.
                     Player player = addon.getServer().getPlayer(args.get(1));
-                    if(Objects.equals(player, null)) {
+                    if(player == null) {
                         user.sendMessage("islandfly.commands.admin.flighttime.invalid-player");
                         return false;
                     }
@@ -172,19 +183,18 @@ public class FlightTimeAdminCommand extends CompositeCommand {
                     // Get BentoBox User for that player.
                     User targetUser = User.getInstance(player);
 
-                    // Verify flight data exists for the player.
-                    if(flightTimeManager.getPlayerFlightData(player.getUniqueId()) == null) {
-                        user.sendMessage("islandfly.commands.admin.flighttime.no-flight-data");
-                        return false;
-                    }
+                    // Get the IslandFlyPlayerData for the player
+                    IslandFlyPlayerData islandFlyPlayerData = playerDataManager.getPlayerFlightData(player.getUniqueId());
 
-                    // Delete the flight data for the player.
-                    int updatedTime = flightTimeManager.deletePlayerFlightData(player);
-                    // Tell the command sender the flight data for the player was deleted.
+                    // Remove any flight time for the player.
+                    islandFlyPlayerData.setTimeSeconds(0);
+                    // Tell the command sender the flight time for the player was deleted.
                     user.sendMessage("islandfly.commands.admin.flighttime.delete-success");
                     // Send the target user that their flight time was changed with the updated number.
-                    // The target user will be told their flight time is 0, but actually no data will exist on disk.
-                    targetUser.sendMessage("islandfly.flight-time-changed", TextVariables.NUMBER, String.valueOf(updatedTime));
+                    targetUser.sendMessage("islandfly.flight-time-changed", TextVariables.NUMBER, String.valueOf(islandFlyPlayerData.getTimeSeconds()));
+
+                    playerDataManager.savePlayerData(islandFlyPlayerData);
+
                     return true;
                 }
             }
@@ -194,6 +204,7 @@ public class FlightTimeAdminCommand extends CompositeCommand {
             user.sendMessage("islandfly.commands.admin.flighttime.syntax");
             return false;
         }
+
         return false;
     }
 
@@ -202,7 +213,7 @@ public class FlightTimeAdminCommand extends CompositeCommand {
      * @param string The string containing a number to parse
      * @return an Integer or null
      */
-    private Integer parseInteger(String string) {
+    private @Nullable Integer parseInteger(String string) {
         try {
             return Integer.parseInt(string);
         } catch (NumberFormatException e) {

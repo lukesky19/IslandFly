@@ -1,6 +1,7 @@
 package world.bentobox.islandfly.commands;
 
 import org.bukkit.entity.Player;
+import org.jetbrains.annotations.NotNull;
 import world.bentobox.bentobox.api.commands.CompositeCommand;
 import world.bentobox.bentobox.api.localization.TextVariables;
 import world.bentobox.bentobox.api.user.User;
@@ -9,23 +10,22 @@ import world.bentobox.bentobox.util.Util;
 import world.bentobox.islandfly.IslandFlyAddon;
 import world.bentobox.islandfly.config.Settings;
 import world.bentobox.islandfly.database.object.IslandFlyPlayerData;
-import world.bentobox.islandfly.managers.FlightTimeManager;
+import world.bentobox.islandfly.managers.BossBarManager;
+import world.bentobox.islandfly.managers.PlayerDataManager;
 
 import java.util.List;
-import java.util.Objects;
+import java.util.UUID;
 
 /**
  * This command allows to enable and disable the temporary flight mode.
  */
-public class TempFlyToggleCommand extends CompositeCommand {
+public class TimedFlyToggleCommand extends CompositeCommand {
     /**
      * Instance of IslandFlyAddon
      */
     final IslandFlyAddon addon;
-    /**
-     * Instance of FlightTimeManager
-     */
-    final FlightTimeManager flightTimeManager;
+    private final @NotNull PlayerDataManager playerDataManager;
+    private final @NotNull BossBarManager bossBarManager;
     /**
      * Instance of IslandFly settings.
      */
@@ -35,13 +35,14 @@ public class TempFlyToggleCommand extends CompositeCommand {
      * Constructor
      * @param parent Instance of CompositeCommand
      * @param addon Instance of IslandFlyAddon
-     * @param flightTimeManager Instance of FlightTimeManager
+     * @param playerDataManager Instance of PlayerDataManager
      */
-    public TempFlyToggleCommand(CompositeCommand parent, IslandFlyAddon addon, FlightTimeManager flightTimeManager) {
-        super(parent, "tempfly");
+    public TimedFlyToggleCommand(CompositeCommand parent, IslandFlyAddon addon, @NotNull PlayerDataManager playerDataManager, @NotNull BossBarManager bossBarManager) {
+        super(parent, "timedfly", "tempfly");
         this.addon = addon;
         this.settings = addon.getSettings();
-        this.flightTimeManager = flightTimeManager;
+        this.playerDataManager = playerDataManager;
+        this.bossBarManager = bossBarManager;
     }
 
     /**
@@ -50,8 +51,8 @@ public class TempFlyToggleCommand extends CompositeCommand {
      */
     @Override
     public void setup() {
-        this.setPermission("island.tempfly");
-        this.setDescription("islandfly.commands.player.tempfly.description");
+        this.setPermission("island.timedfly");
+        this.setDescription("islandfly.commands.player.timedfly.description");
         this.setOnlyPlayer(true);
     }
 
@@ -104,10 +105,9 @@ public class TempFlyToggleCommand extends CompositeCommand {
             }
         }
 
-        // Checks if the user has no flight data or flight time equal to 0.
-        IslandFlyPlayerData data = flightTimeManager.getPlayerFlightData(user.getUniqueId());
-        if(Objects.equals(data, null)
-                || data.getTimeSeconds() == 0) {
+        // Checks if the user has flight time equal to 0.
+        IslandFlyPlayerData data = playerDataManager.getPlayerFlightData(user.getUniqueId());
+        if(data.getTimeSeconds() == 0) {
             user.sendMessage("islandfly.no-time-left");
             return false;
         }
@@ -125,17 +125,34 @@ public class TempFlyToggleCommand extends CompositeCommand {
     @Override
     public boolean execute(User user, String label, List<String> args) {
         final Player player = user.getPlayer();
+        UUID uuid = player.getUniqueId();
+        IslandFlyPlayerData islandFlyPlayerData = playerDataManager.getPlayerFlightData(uuid);
 
-        if(flightTimeManager.isPlayerFlightTimeTracked(player.getUniqueId())) {
-            flightTimeManager.stopTrackingPlayerFlightTime(player);
+        if(islandFlyPlayerData.isTimedFlightEnabled()) {
+            // Disable Fly
+            islandFlyPlayerData.setNormalFlight(false);
+            islandFlyPlayerData.setTimedFlight(false);
             player.setAllowFlight(false);
             player.setFlying(false);
+
+            // Remove Boss Bar
+            bossBarManager.removeBossBar(player);
+
+            // Notify Player
             user.sendMessage("islandfly.disable-fly");
         } else {
-            flightTimeManager.trackPlayerFlightTime(player);
+            // Enable Fly
+            islandFlyPlayerData.setNormalFlight(false);
+            islandFlyPlayerData.setTimedFlight(true);
             player.setAllowFlight(true);
+
+            // Show Boss Bar
+            bossBarManager.addFlightTimeBossBar(player);
+
+            // Notify Player
             user.sendMessage("islandfly.enable-fly");
         }
+
         return true;
     }
 }

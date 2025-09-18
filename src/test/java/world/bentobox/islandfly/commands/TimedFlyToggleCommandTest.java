@@ -20,7 +20,8 @@ import world.bentobox.bentobox.util.Util;
 import world.bentobox.islandfly.IslandFlyAddon;
 import world.bentobox.islandfly.config.Settings;
 import world.bentobox.islandfly.database.object.IslandFlyPlayerData;
-import world.bentobox.islandfly.managers.FlightTimeManager;
+import world.bentobox.islandfly.managers.BossBarManager;
+import world.bentobox.islandfly.managers.PlayerDataManager;
 
 import java.util.Collections;
 import java.util.Optional;
@@ -31,7 +32,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-public class TempFlyToggleCommandTest {
+public class TimedFlyToggleCommandTest {
     @Mock
     BentoBox plugin;
     @Mock
@@ -44,7 +45,7 @@ public class TempFlyToggleCommandTest {
     World world;
     @Mock
     Player player;
-    TempFlyToggleCommand tempFlyToggleCommand;
+    TimedFlyToggleCommand timedFlyToggleCommand;
     @Mock
     IslandsManager islandsManager;
     @Mock
@@ -55,7 +56,9 @@ public class TempFlyToggleCommandTest {
     @Mock
     BoundingBox boundingBox;
     @Mock
-    FlightTimeManager flightTimeManager;
+    PlayerDataManager playerDataManager;
+    @Mock
+    BossBarManager bossBarManager;
 
     MockedStatic<User> mockedUserClass;
     MockedStatic<Util> mockedUtilClass;
@@ -82,7 +85,7 @@ public class TempFlyToggleCommandTest {
         settings = new Settings();
         when(addon.getSettings()).thenReturn(settings);
 
-        tempFlyToggleCommand = new TempFlyToggleCommand(compositeCommand, addon, flightTimeManager);
+        timedFlyToggleCommand = new TimedFlyToggleCommand(compositeCommand, addon, playerDataManager, bossBarManager);
     }
 
     @AfterEach
@@ -92,15 +95,15 @@ public class TempFlyToggleCommandTest {
     }
 
     @Test
-    public void testTempFlyToggleCommand() {
-        assertEquals("tempfly", tempFlyToggleCommand.getLabel());
+    public void testTimedFlyToggleCommand() {
+        assertEquals("timedfly", timedFlyToggleCommand.getLabel());
     }
 
     @Test
     public void testSetup() {
-        assertEquals("bskyblock.island.tempfly", tempFlyToggleCommand.getPermission());
-        assertEquals("islandfly.commands.player.tempfly.description", tempFlyToggleCommand.getDescription());
-        assertTrue(tempFlyToggleCommand.isOnlyPlayer());
+        assertEquals("bskyblock.island.timedfly", timedFlyToggleCommand.getPermission());
+        assertEquals("islandfly.commands.player.timedfly.description", timedFlyToggleCommand.getDescription());
+        assertTrue(timedFlyToggleCommand.isOnlyPlayer());
     }
 
     @Test
@@ -108,7 +111,7 @@ public class TempFlyToggleCommandTest {
         when(compositeCommand.getWorld()).thenReturn(world);
         when(Util.getWorld(user.getWorld())).thenReturn(mock(World.class));
 
-        assertFalse(tempFlyToggleCommand.canExecute(user, "tempfly", Collections.emptyList()));
+        assertFalse(timedFlyToggleCommand.canExecute(user, "timedfly", Collections.emptyList()));
         verify(user).sendMessage("islandfly.wrong-world");
     }
 
@@ -121,7 +124,7 @@ public class TempFlyToggleCommandTest {
         when(plugin.getIslands()).thenReturn(islandsManager);
         when(islandsManager.getIslandAt(any())).thenReturn(Optional.empty());
 
-        assertFalse(tempFlyToggleCommand.canExecute(user, "tempfly", Collections.emptyList()));
+        assertFalse(timedFlyToggleCommand.canExecute(user, "timedFly", Collections.emptyList()));
     }
 
     @Test
@@ -137,7 +140,7 @@ public class TempFlyToggleCommandTest {
         when(island.isSpawn()).thenReturn(true);
         when(user.hasPermission(eq("bskyblock.island.flyspawn"))).thenReturn(true);
 
-        assertTrue(tempFlyToggleCommand.canExecute(user, "tempfly", Collections.emptyList()));
+        assertTrue(timedFlyToggleCommand.canExecute(user, "timedFly", Collections.emptyList()));
     }
 
     @Test
@@ -153,7 +156,7 @@ public class TempFlyToggleCommandTest {
         when(island.isAllowed(eq(user), any())).thenReturn(false);
         when(user.hasPermission(anyString())).thenReturn(false);
 
-        assertFalse(tempFlyToggleCommand.canExecute(user, "tempfly", Collections.emptyList()));
+        assertFalse(timedFlyToggleCommand.canExecute(user, "timedFly", Collections.emptyList()));
         verify(user).sendMessage("islandfly.island-not-allowed-fly");
     }
 
@@ -176,9 +179,9 @@ public class TempFlyToggleCommandTest {
         when(island.getProtectionBoundingBox()).thenReturn(boundingBox);
         when(island.getProtectionBoundingBox().contains(user.getLocation().toVector())).thenReturn(true);
 
-        when(flightTimeManager.getPlayerFlightData(uuid)).thenReturn(new IslandFlyPlayerData(uuid.toString(), 1));
+        when(playerDataManager.getPlayerFlightData(uuid)).thenReturn(new IslandFlyPlayerData(uuid.toString(), 1));
 
-        assertTrue(tempFlyToggleCommand.canExecute(user, "tempfly", Collections.emptyList()));
+        assertTrue(timedFlyToggleCommand.canExecute(user, "timedFly", Collections.emptyList()));
         verify(user, never()).sendMessage(anyString());
     }
 
@@ -200,9 +203,9 @@ public class TempFlyToggleCommandTest {
         when(island.getProtectionBoundingBox()).thenReturn(boundingBox);
         when(island.getProtectionBoundingBox().contains(user.getLocation().toVector())).thenReturn(true);
 
-        when(flightTimeManager.getPlayerFlightData(uuid)).thenReturn(new IslandFlyPlayerData(uuid.toString(), 1));
+        when(playerDataManager.getPlayerFlightData(uuid)).thenReturn(new IslandFlyPlayerData(uuid.toString(), 1));
 
-        assertTrue(tempFlyToggleCommand.canExecute(user, "tempfly", Collections.emptyList()));
+        assertTrue(timedFlyToggleCommand.canExecute(user, "timedFly", Collections.emptyList()));
         verify(user, never()).sendMessage(anyString());
     }
 
@@ -220,7 +223,7 @@ public class TempFlyToggleCommandTest {
         when(island.getProtectionBoundingBox()).thenReturn(boundingBox);
         when(island.getProtectionBoundingBox().contains(user.getLocation().toVector())).thenReturn(false);
 
-        assertFalse(tempFlyToggleCommand.canExecute(user, "tempfly", Collections.emptyList()));
+        assertFalse(timedFlyToggleCommand.canExecute(user, "timedFly", Collections.emptyList()));
         verify(user).sendMessage("islandfly.outside-protection-range");
     }
 
@@ -240,9 +243,9 @@ public class TempFlyToggleCommandTest {
         settings.setAllowCommandOutsideProtectionRange(true);
         when(island.isAllowed(eq(user), any())).thenReturn(true);
 
-        when(flightTimeManager.getPlayerFlightData(uuid)).thenReturn(new IslandFlyPlayerData(uuid.toString(), 1));
+        when(playerDataManager.getPlayerFlightData(uuid)).thenReturn(new IslandFlyPlayerData(uuid.toString(), 1));
 
-        assertTrue(tempFlyToggleCommand.canExecute(user, "fly", Collections.emptyList()));
+        assertTrue(timedFlyToggleCommand.canExecute(user, "fly", Collections.emptyList()));
         verify(user, never()).sendMessage(anyString());
     }
 
@@ -264,9 +267,9 @@ public class TempFlyToggleCommandTest {
         when(island.getProtectionBoundingBox()).thenReturn(boundingBox);
         when(island.getProtectionBoundingBox().contains(user.getLocation().toVector())).thenReturn(true);
 
-        when(flightTimeManager.getPlayerFlightData(uuid)).thenReturn(new IslandFlyPlayerData(uuid.toString(), 0));
+        when(playerDataManager.getPlayerFlightData(uuid)).thenReturn(new IslandFlyPlayerData(uuid.toString(), 0));
 
-        assertFalse(tempFlyToggleCommand.canExecute(user, "tempfly", Collections.emptyList()));
+        assertFalse(timedFlyToggleCommand.canExecute(user, "timedFly", Collections.emptyList()));
         verify(user).sendMessage("islandfly.no-time-left");
     }
 
@@ -288,18 +291,23 @@ public class TempFlyToggleCommandTest {
         when(island.getProtectionBoundingBox()).thenReturn(boundingBox);
         when(island.getProtectionBoundingBox().contains(user.getLocation().toVector())).thenReturn(true);
 
-        when(flightTimeManager.getPlayerFlightData(uuid)).thenReturn(new IslandFlyPlayerData(uuid.toString(), 1));
+        when(playerDataManager.getPlayerFlightData(uuid)).thenReturn(new IslandFlyPlayerData(uuid.toString(), 1));
 
-        assertTrue(tempFlyToggleCommand.canExecute(user, "tempfly", Collections.emptyList()));
+        assertTrue(timedFlyToggleCommand.canExecute(user, "timedFly", Collections.emptyList()));
         verify(user, never()).sendMessage(anyString());
     }
 
     @Test
     public void testExecuteDisableFlight() {
+        uuid = UUID.randomUUID();
         when(user.getPlayer()).thenReturn(player);
+        when(player.getUniqueId()).thenReturn(uuid);
 
-        when(flightTimeManager.isPlayerFlightTimeTracked(any())).thenReturn(true);
-        tempFlyToggleCommand.execute(user, "tempfly", Collections.emptyList());
+        IslandFlyPlayerData islandFlyPlayerData = new IslandFlyPlayerData(uuid.toString(), 0);
+        islandFlyPlayerData.setTimedFlight(true);
+        when(playerDataManager.getPlayerFlightData(uuid)).thenReturn(islandFlyPlayerData);
+
+        timedFlyToggleCommand.execute(user, "timedfly", Collections.emptyList());
         verify(player).setAllowFlight(false);
         verify(player).setFlying(false);
         verify(user).sendMessage("islandfly.disable-fly");
@@ -307,10 +315,14 @@ public class TempFlyToggleCommandTest {
 
     @Test
     public void testExecuteEnableFlight() {
+        uuid = UUID.randomUUID();
         when(user.getPlayer()).thenReturn(player);
+        when(player.getUniqueId()).thenReturn(uuid);
 
-        when(flightTimeManager.isPlayerFlightTimeTracked(any())).thenReturn(false);
-        tempFlyToggleCommand.execute(user, "tempfly", Collections.emptyList());
+        IslandFlyPlayerData islandFlyPlayerData = new IslandFlyPlayerData(uuid.toString(), 0);
+        when(playerDataManager.getPlayerFlightData(uuid)).thenReturn(islandFlyPlayerData);
+
+        timedFlyToggleCommand.execute(user, "timedfly", Collections.emptyList());
         verify(player).setAllowFlight(true);
         verify(user).sendMessage("islandfly.enable-fly");
     }

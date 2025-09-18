@@ -15,7 +15,6 @@ import world.bentobox.bentobox.api.configuration.StoreAt;
 import java.util.HashSet;
 import java.util.Set;
 
-
 /**
  * Settings that implements ConfigObject is powerful and dynamic Config Objects that
  * does not need custom parsing. If it is correctly loaded, all its values will be available.

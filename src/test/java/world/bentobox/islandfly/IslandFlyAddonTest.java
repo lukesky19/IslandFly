@@ -20,6 +20,9 @@ import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 import java.util.logging.Logger;
 
+import org.bukkit.Bukkit;
+import org.bukkit.Server;
+import org.bukkit.scheduler.BukkitScheduler;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -41,23 +44,35 @@ import world.bentobox.islandfly.listeners.FlyLogoutListener;
 
 /**
  * @author tastybento
- *
  */
 @ExtendWith(MockitoExtension.class)
 public class IslandFlyAddonTest {
     @Mock
-    BentoBox plugin;
+    private BentoBox plugin;
     @Mock
-    Settings settings;
+    private Settings settings;
+    private static Logger logger;
+    private static Server server;
     @Mock
-    Logger logger;
+    private BukkitScheduler scheduler;
     @Mock
     private AddonsManager am;
     @Mock
     private GameModeAddon gameMode;
     @Mock
     private FlagsManager fm;
-    IslandFlyAddon addon;
+    // Class to test
+    private IslandFlyAddon addon;
+
+    @BeforeAll
+    public static void beforeClass() {
+        server = mock(Server.class);
+        logger = mock(Logger.class);
+
+        // Server
+        when(server.getLogger()).thenReturn(logger);
+        Bukkit.setServer(server);
+    }
 
     @BeforeEach
     public void setUp() throws IOException, NoSuchFieldException, IllegalAccessException {
@@ -112,7 +127,11 @@ public class IslandFlyAddonTest {
      */
     @Test
     public void testOnEnable() {
+        // Logger
         when(plugin.getLogger()).thenReturn(logger);
+
+        // Scheduler
+        when(server.getScheduler()).thenReturn(scheduler);
 
         // Player command
         CompositeCommand cmd = mock(CompositeCommand.class);
@@ -148,12 +167,18 @@ public class IslandFlyAddonTest {
      */
     @Test
     public void testOnEnableNoHook() {
+        // Plugin
+        when(plugin.getLogger()).thenReturn(logger);
+        when(plugin.getAddonsManager()).thenReturn(am);
+
         // Settings for Database
         when(plugin.getSettings()).thenReturn(settings);
         doReturn(DatabaseSetup.DatabaseType.JSON).when(settings).getDatabaseType();
 
-        when(plugin.getLogger()).thenReturn(logger);
-        when(plugin.getAddonsManager()).thenReturn(am);
+        // Scheduler
+        when(server.getScheduler()).thenReturn(scheduler);
+
+        // Addon
         when(addon.getPlugin().getAddonsManager().getGameModeAddons()).thenReturn(Collections.singletonList(gameMode));
 
         AddonDescription desc2 = new AddonDescription.Builder("bentobox", "BSkyBlock", "1.3").description("test").authors("tasty").build();

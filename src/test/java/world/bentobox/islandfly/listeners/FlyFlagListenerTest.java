@@ -35,7 +35,9 @@ import world.bentobox.bentobox.managers.LocalesManager;
 import world.bentobox.bentobox.managers.PlaceholdersManager;
 import world.bentobox.islandfly.IslandFlyAddon;
 import world.bentobox.islandfly.config.Settings;
-import world.bentobox.islandfly.managers.FlightTimeManager;
+import world.bentobox.islandfly.database.object.IslandFlyPlayerData;
+import world.bentobox.islandfly.managers.BossBarManager;
+import world.bentobox.islandfly.managers.PlayerDataManager;
 
 /**
  * @author tastybento
@@ -65,7 +67,9 @@ public class FlyFlagListenerTest {
     @Mock
     private Island island;
     @Mock
-    FlightTimeManager flightTimeManager;
+    PlayerDataManager playerDataManager;
+    @Mock
+    BossBarManager bossBarManager;
     @Mock
     private Spigot spigot;
 
@@ -91,7 +95,7 @@ public class FlyFlagListenerTest {
         when(op.getUniqueId()).thenReturn(UUID.randomUUID());
         User.getInstance(op);
         
-        ffl = new FlyFlagListener(addon, flightTimeManager);
+        ffl = new FlyFlagListener(addon, playerDataManager, bossBarManager);
     }
 
     @AfterEach
@@ -134,9 +138,16 @@ public class FlyFlagListenerTest {
         list.add(op);
         when(island.getPlayersOnIsland()).thenReturn(list);
 
+        UUID uuid = UUID.randomUUID();
+        IslandFlyPlayerData islandFlyPlayerData = new IslandFlyPlayerData(uuid.toString(), 0);
+        when(playerDataManager.getPlayerFlightData(uuid)).thenReturn(islandFlyPlayerData);
+        islandFlyPlayerData.setNormalFlight(true);
+
         // Player 2
+        when(p2.getAllowFlight()).thenReturn(true);
         when(p2.isFlying()).thenReturn(true);
         when(p2.spigot()).thenReturn(spigot);
+        when(p2.getUniqueId()).thenReturn(uuid);
 
         // Settings
         when(addon.getSettings()).thenReturn(settings);
@@ -178,9 +189,16 @@ public class FlyFlagListenerTest {
         list.add(op);
         when(island.getPlayersOnIsland()).thenReturn(list);
 
+        UUID uuid = UUID.randomUUID();
+        IslandFlyPlayerData islandFlyPlayerData = new IslandFlyPlayerData(uuid.toString(), 0);
+        when(playerDataManager.getPlayerFlightData(uuid)).thenReturn(islandFlyPlayerData);
+        islandFlyPlayerData.setNormalFlight(true);
+
         // Player 2
+        when(p2.getAllowFlight()).thenReturn(true);
         when(p2.isFlying()).thenReturn(true);
         when(p2.spigot()).thenReturn(spigot);
+        when(p2.getUniqueId()).thenReturn(uuid);
 
         // Settings
         when(addon.getSettings()).thenReturn(settings);
@@ -233,8 +251,13 @@ public class FlyFlagListenerTest {
      */
     @Test
     public void testDisable() {
+        UUID uuid = UUID.randomUUID();
         when(p2.isOnline()).thenReturn(true);
         when(p2.spigot()).thenReturn(spigot);
+        when(p2.getUniqueId()).thenReturn(uuid);
+
+        IslandFlyPlayerData islandFlyPlayerData = new IslandFlyPlayerData(uuid.toString(), 0);
+        when(playerDataManager.getPlayerFlightData(uuid)).thenReturn(islandFlyPlayerData);
 
         when(island.isAllowed(any(), any())).thenReturn(false);
         when(island.onIsland(p2.getLocation())).thenReturn(true);

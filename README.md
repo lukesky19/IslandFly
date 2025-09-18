@@ -24,7 +24,8 @@ If the fly mode should be disabled when a player disconnect.
 ## Commands
 **/is fly** - This command toggles flight **On** and **Off**
 
-**/is tempfly** - This command toggles temporary flight **On** and **Off**
+**/is timedfly** - This command toggles temporary flight **On** and **Off**
+* Alias: **/is tempfly**
 
 **/is flighttime** - This command can be used to retrieve your current temporary flight time.
 
@@ -35,7 +36,7 @@ If the fly mode should be disabled when a player disconnect.
 ## Permissions
 **[gamemode].island.fly** - For usage of flight command.
 
-**[gamemode].island.tempfly** - For usage of the temporary flight command.
+**[gamemode].island.timedfly** - For usage of the timed flight command.
 
 **[gamemode].island.flighttime** - For usage of the player flight time command.
 

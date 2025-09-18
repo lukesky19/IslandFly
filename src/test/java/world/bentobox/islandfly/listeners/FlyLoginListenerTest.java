@@ -14,7 +14,8 @@ import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 import world.bentobox.bentobox.api.user.User;
 import world.bentobox.islandfly.IslandFlyAddon;
-import world.bentobox.islandfly.managers.FlightTimeManager;
+import world.bentobox.islandfly.managers.BossBarManager;
+import world.bentobox.islandfly.managers.PlayerDataManager;
 
 import java.util.UUID;
 
@@ -30,7 +31,9 @@ public class FlyLoginListenerTest {
     @Mock
     private IslandFlyAddon addon;
     @Mock
-    private FlightTimeManager flightTimeManager;
+    private PlayerDataManager playerDataManager;
+    @Mock
+    BossBarManager bossBarManager;
     @Mock
     private World world;
     @Mock
@@ -53,7 +56,7 @@ public class FlyLoginListenerTest {
 
     @BeforeEach
     public void setUp() {
-        flyLoginListener = new FlyLoginListener(addon, flightTimeManager);
+        flyLoginListener = new FlyLoginListener(addon, playerDataManager, bossBarManager);
         // User
         mockedUserClass = mockStatic(User.class);
         mockedUserClass.when(() -> User.getInstance(uuid)).thenReturn(user);

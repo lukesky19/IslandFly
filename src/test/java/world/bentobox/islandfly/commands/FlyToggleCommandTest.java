@@ -11,12 +11,12 @@ import static org.mockito.Mockito.mockStatic;
 
 import java.util.Collections;
 import java.util.Optional;
+import java.util.UUID;
 
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.util.BoundingBox;
-import org.eclipse.jdt.annotation.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,6 +33,9 @@ import world.bentobox.bentobox.managers.IslandsManager;
 import world.bentobox.bentobox.util.Util;
 import world.bentobox.islandfly.IslandFlyAddon;
 import world.bentobox.islandfly.config.Settings;
+import world.bentobox.islandfly.database.object.IslandFlyPlayerData;
+import world.bentobox.islandfly.managers.BossBarManager;
+import world.bentobox.islandfly.managers.PlayerDataManager;
 
 /**
  * @author tastybento
@@ -55,7 +58,11 @@ public class FlyToggleCommandTest {
     @Mock
     private IslandsManager islandsManager;
     @Mock
-    private @Nullable Location location;
+    private PlayerDataManager playerDataManager;
+    @Mock
+    private BossBarManager bossBarManager;
+    @Mock
+    private Location location;
     @Mock
     private Island island;
     private Settings settings;
@@ -84,7 +91,7 @@ public class FlyToggleCommandTest {
         settings = new Settings();
         when(addon.getSettings()).thenReturn(settings);
 
-        flyToggleCommand = new FlyToggleCommand(compositeCommand, addon);
+        flyToggleCommand = new FlyToggleCommand(compositeCommand, addon, playerDataManager, bossBarManager);
     }
 
     @AfterEach
@@ -94,7 +101,7 @@ public class FlyToggleCommandTest {
     }
 
     /**
-     * Test method for {@link FlyToggleCommand#FlyToggleCommand(world.bentobox.bentobox.api.commands.CompositeCommand, IslandFlyAddon)}.
+     * Test method for {@link FlyToggleCommand#FlyToggleCommand(CompositeCommand, IslandFlyAddon, PlayerDataManager, BossBarManager)}.
      */
     @Test
     public void testFlyToggleCommand() {
@@ -265,7 +272,12 @@ public class FlyToggleCommandTest {
      */
     @Test
     public void testExecuteDisableFlight() {
+        UUID uuid = UUID.randomUUID();
         when(user.getPlayer()).thenReturn(player);
+        when(player.getUniqueId()).thenReturn(uuid);
+
+        IslandFlyPlayerData islandFlyPlayerData = new IslandFlyPlayerData(uuid.toString(), 69);
+        when(playerDataManager.getPlayerFlightData(any())).thenReturn(islandFlyPlayerData);
 
         when(player.getAllowFlight()).thenReturn(true);
         flyToggleCommand.execute(user, "fly", Collections.emptyList());
@@ -278,7 +290,12 @@ public class FlyToggleCommandTest {
      */
     @Test
     public void textExecuteEnableFlight() {
+        UUID uuid = UUID.randomUUID();
         when(user.getPlayer()).thenReturn(player);
+        when(player.getUniqueId()).thenReturn(uuid);
+
+        IslandFlyPlayerData islandFlyPlayerData = new IslandFlyPlayerData(uuid.toString(), 0);
+        when(playerDataManager.getPlayerFlightData(uuid)).thenReturn(islandFlyPlayerData);
 
         flyToggleCommand.execute(user, "fly", Collections.emptyList());
         verify(player).setAllowFlight(true);

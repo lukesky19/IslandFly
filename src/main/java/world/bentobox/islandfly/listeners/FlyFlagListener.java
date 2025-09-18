@@ -4,90 +4,99 @@ import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.jetbrains.annotations.NotNull;
 import world.bentobox.bentobox.api.events.flags.FlagProtectionChangeEvent;
 import world.bentobox.bentobox.api.localization.TextVariables;
 import world.bentobox.bentobox.api.user.User;
 import world.bentobox.bentobox.database.objects.Island;
 import world.bentobox.islandfly.IslandFlyAddon;
-import world.bentobox.islandfly.managers.FlightTimeManager;
+import world.bentobox.islandfly.database.object.IslandFlyPlayerData;
+import world.bentobox.islandfly.managers.BossBarManager;
+import world.bentobox.islandfly.managers.PlayerDataManager;
 
 /**
  * This class disables flight when the island fly flag is changed.
  */
 public class FlyFlagListener implements Listener {
-    /**
-     * Instance of IslandFlyAddon
-     */
-    final IslandFlyAddon addon;
-    /**
-     * Instance of FlightTimeManager
-     */
-    final FlightTimeManager flightTimeManager;
+    private final @NotNull IslandFlyAddon islandFlyAddon;
+    private final @NotNull PlayerDataManager playerDataManager;
+    private final @NotNull BossBarManager bossBarManager;
 
     /**
-     * Constructor
-     * @param addon Instance of IslandFlyAddon
-     * @param flightTimeManager Instance of FlightTimeManager
+     * Constructor.
+     * @param islandFlyAddon An {@link IslandFlyAddon} instance.
+     * @param playerDataManager  A {@link PlayerDataManager} instance.
+     * @param bossBarManager A {@link BossBarManager} instance.
      */
-    public FlyFlagListener(IslandFlyAddon addon, FlightTimeManager flightTimeManager) {
-        this.addon = addon;
-        this.flightTimeManager = flightTimeManager;
+    public FlyFlagListener(
+            @NotNull IslandFlyAddon islandFlyAddon,
+            @NotNull PlayerDataManager playerDataManager,
+            @NotNull BossBarManager bossBarManager) {
+        this.islandFlyAddon = islandFlyAddon;
+        this.playerDataManager = playerDataManager;
+        this.bossBarManager = bossBarManager;
     }
 
     /**
-     * Finds all players who are flying when the Island Fly Protection flag is changed and
-     * disables their flight if necessary.
-     * @param e Instance of FlagProtectionChangeEvent.
+     * When Island Fly Protection flag is changed, disable any players flight if necessary.
+     * @param flagProtectionChangeEvent A {@link FlagProtectionChangeEvent}.
      */
     @EventHandler
-    public void onFlagChange(FlagProtectionChangeEvent e) {
+    public void onFlagChange(FlagProtectionChangeEvent flagProtectionChangeEvent) {
         // Only continue if the flag changed is for island fly.
-        if(!e.getEditedFlag().equals(IslandFlyAddon.ISLAND_FLY_PROTECTION)) return;
+        if(!flagProtectionChangeEvent.getEditedFlag().equals(IslandFlyAddon.ISLAND_FLY_PROTECTION)) return;
 
         // Get the island that the flag was changed for.
-        Island island = e.getIsland();
+        Island island = flagProtectionChangeEvent.getIsland();
 
-        // Stream through all of the flying and not allowed users at
-        // the moment and warn them that their fly is about to turn off
+        // Stream through users that can fly that are no longer allowed to fly
+        // and warn them that their fly is about to turn off
         island.getPlayersOnIsland()
-        .stream()
-        //.parallelStream()
-        .filter(Player::isFlying)
-        .filter(p -> !p.isOp())
-        .filter(p -> !(island.isAllowed(User.getInstance(p), IslandFlyAddon.ISLAND_FLY_PROTECTION)))
-        .forEach(p -> startDisabling(p, island));
+                .stream()
+                //.parallelStream()
+                .filter(Player::getAllowFlight)
+                .filter(player -> {
+                    IslandFlyPlayerData islandFlyPlayerData = playerDataManager.getPlayerFlightData(player.getUniqueId());
+                    return player.isFlying() || (islandFlyPlayerData.isNormalFlightEnabled() || islandFlyPlayerData.isTimedFlightEnabled());
+                })
+                .filter(p -> !p.isOp())
+                .filter(p -> !(island.isAllowed(User.getInstance(p), IslandFlyAddon.ISLAND_FLY_PROTECTION)))
+                .forEach(player -> startDisabling(player, island));
     }
 
     /**
      * Tells the player that their flight will be disabled based on the
      * fly timeout setting and schedules their flight to be disabled.
-     * @param p The player to disable flight for.
+     * @param player The player to disable flight for.
      * @param island The island the player is on.
      */
-    private void startDisabling(Player p, Island island) {
-        int flyTimeout = this.addon.getSettings().getFlyTimeout();
-        User user = User.getInstance(p);
+    private void startDisabling(Player player, Island island) {
+        int flyTimeout = this.islandFlyAddon.getSettings().getFlyTimeout();
+        User user = User.getInstance(player);
+        // Get the player's IslandFlyPlayerData
+        IslandFlyPlayerData islandFlyPlayerData = playerDataManager.getPlayerFlightData(player.getUniqueId());
 
         // Alert player fly will be disabled.
         user.sendMessage("islandfly.fly-turning-off-alert", TextVariables.NUMBER, String.valueOf(flyTimeout));
 
         // If timeout is 0 or less, disable fly immediately.
-        if (flyTimeout <= 0) {
-            // Stop tracking flight time.
-            if(flightTimeManager.isPlayerFlightTimeTracked(user.getUniqueId())) {
-                flightTimeManager.stopTrackingPlayerFlightTime(p);
-            }
-
+        if(flyTimeout <= 0) {
             // Disable player's flight.
-            p.setFlying(false);
-            p.setAllowFlight(false);
-            // Send message to the user that their flight was disabled.
+            islandFlyPlayerData.setNormalFlight(false);
+            islandFlyPlayerData.setTimedFlight(false);
+            player.setFlying(false);
+            player.setAllowFlight(false);
+
+            // Remove the boss bar
+            bossBarManager.removeBossBar(player);
+
+            // Send a message to the user that their flight was disabled.
             user.sendMessage("islandfly.disable-fly");
             return;
         }
 
         // Else disable fly with a delay
-        Bukkit.getScheduler().runTaskLater(this.addon.getPlugin(), () -> disable(p, user, island), 20L* flyTimeout);
+        Bukkit.getScheduler().runTaskLater(this.islandFlyAddon.getPlugin(), () -> disable(player, user, island), 20L* flyTimeout);
     }
 
     /**
@@ -99,6 +108,8 @@ public class FlyFlagListener implements Listener {
     void disable(Player player, User user, Island island) {
         // Verify that player is still online
         if(!user.isOnline()) return;
+        // Get the player's IslandFlyPlayerData
+        IslandFlyPlayerData islandFlyPlayerData = playerDataManager.getPlayerFlightData(player.getUniqueId());
 
         // Check if user was reallowed to fly in the meantime
         if(!island.isAllowed(user,IslandFlyAddon.ISLAND_FLY_PROTECTION)) {
@@ -106,14 +117,15 @@ public class FlyFlagListener implements Listener {
             // It will be the job of Enter/Exit island event to turn fly off if required
             if(!island.onIsland(player.getLocation())) return;
 
-            // Stop tracking flight time.
-            if(flightTimeManager.isPlayerFlightTimeTracked(user.getUniqueId())) {
-                flightTimeManager.stopTrackingPlayerFlightTime(player);
-            }
-
             // Disable player's flight.
+            islandFlyPlayerData.setNormalFlight(false);
+            islandFlyPlayerData.setTimedFlight(false);
             player.setFlying(false);
             player.setAllowFlight(false);
+
+            // Remove the boss bar
+            bossBarManager.removeBossBar(player);
+
             // Send a message to the user that their flight was disabled.
             user.sendMessage("islandfly.disable-fly");
         }

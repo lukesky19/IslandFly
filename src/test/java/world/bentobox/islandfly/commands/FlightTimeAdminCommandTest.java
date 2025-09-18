@@ -14,7 +14,8 @@ import world.bentobox.bentobox.api.localization.TextVariables;
 import world.bentobox.bentobox.api.user.User;
 import world.bentobox.islandfly.IslandFlyAddon;
 import world.bentobox.islandfly.database.object.IslandFlyPlayerData;
-import world.bentobox.islandfly.managers.FlightTimeManager;
+import world.bentobox.islandfly.managers.PlayerDataManager;
+import world.bentobox.islandfly.util.FormatUtil;
 
 import java.util.*;
 
@@ -40,7 +41,7 @@ public class FlightTimeAdminCommandTest {
     UUID senderUuid;
     UUID targetUuid;
     @Mock
-    FlightTimeManager flightTimeManager;
+    PlayerDataManager playerDataManager;
     FlightTimeAdminCommand flightTimeAdminCommand;
 
     MockedStatic<User> mockedUserClass;
@@ -64,7 +65,7 @@ public class FlightTimeAdminCommandTest {
         mockedUserClass = mockStatic(User.class);
         mockedUserClass.when(() -> User.getInstance(player)).thenReturn(targetUser);
 
-        flightTimeAdminCommand = new FlightTimeAdminCommand(compositeCommand, addon, flightTimeManager);
+        flightTimeAdminCommand = new FlightTimeAdminCommand(compositeCommand, addon, playerDataManager);
     }
 
     @AfterEach
@@ -110,8 +111,9 @@ public class FlightTimeAdminCommandTest {
         when(addon.getServer()).thenReturn(server);
         when(player.getName()).thenReturn("lukeskywlker19");
         when(addon.getServer().getPlayer(anyString())).thenReturn(player);
+        IslandFlyPlayerData islandFlyPlayerData = new IslandFlyPlayerData(targetUuid.toString(), 69);
+        when(playerDataManager.getPlayerFlightData(any())).thenReturn(islandFlyPlayerData);
 
-        when(flightTimeManager.addPlayerFlightTime(player, 1)).thenReturn(70);
         List<String> args = Arrays.asList("add", player.getName(), String.valueOf(1));
         assertTrue(flightTimeAdminCommand.execute(senderUser, "flighttime", args));
         verify(senderUser).sendMessage("islandfly.commands.admin.flighttime.add-success", TextVariables.NUMBER, String.valueOf(70));
@@ -143,8 +145,9 @@ public class FlightTimeAdminCommandTest {
         when(addon.getServer()).thenReturn(server);
         when(player.getName()).thenReturn("lukeskywlker19");
         when(addon.getServer().getPlayer(anyString())).thenReturn(player);
+        IslandFlyPlayerData islandFlyPlayerData = new IslandFlyPlayerData(targetUuid.toString(), 69);
+        when(playerDataManager.getPlayerFlightData(any())).thenReturn(islandFlyPlayerData);
 
-        when(flightTimeManager.setPlayerFlightTime(player, 1)).thenReturn(1);
         List<String> args = Arrays.asList("set", player.getName(), String.valueOf(1));
         assertTrue(flightTimeAdminCommand.execute(senderUser, "flighttime", args));
         verify(senderUser).sendMessage("islandfly.commands.admin.flighttime.set-success", TextVariables.NUMBER, String.valueOf(1));
@@ -176,8 +179,9 @@ public class FlightTimeAdminCommandTest {
         when(addon.getServer()).thenReturn(server);
         when(player.getName()).thenReturn("lukeskywlker19");
         when(addon.getServer().getPlayer(anyString())).thenReturn(player);
+        IslandFlyPlayerData islandFlyPlayerData = new IslandFlyPlayerData(targetUuid.toString(), 69);
+        when(playerDataManager.getPlayerFlightData(any())).thenReturn(islandFlyPlayerData);
 
-        when(flightTimeManager.removePlayerFlightTime(player, 1)).thenReturn(68);
         List<String> args = Arrays.asList("remove", player.getName(), String.valueOf(1));
         assertTrue(flightTimeAdminCommand.execute(senderUser, "flighttime", args));
         verify(senderUser).sendMessage("islandfly.commands.admin.flighttime.remove-success", TextVariables.NUMBER, String.valueOf(68));
@@ -199,9 +203,9 @@ public class FlightTimeAdminCommandTest {
         when(player.getName()).thenReturn("lukeskywlker19");
         when(addon.getServer().getPlayer(anyString())).thenReturn(player);
 
-        when(flightTimeManager.getPlayerFlightData(player.getUniqueId())).thenReturn(new IslandFlyPlayerData(targetUuid.toString(), 69));
+        IslandFlyPlayerData islandFlyPlayerData = new IslandFlyPlayerData(targetUuid.toString(), 69);
+        when(playerDataManager.getPlayerFlightData(any())).thenReturn(islandFlyPlayerData);
 
-        when(flightTimeManager.deletePlayerFlightData(player)).thenReturn(0);
         List<String> args = Arrays.asList("delete", player.getName());
         assertTrue(flightTimeAdminCommand.execute(senderUser, "flighttime", args));
         verify(senderUser).sendMessage("islandfly.commands.admin.flighttime.delete-success");
@@ -218,29 +222,17 @@ public class FlightTimeAdminCommandTest {
     }
 
     @Test
-    public void testGetPlayerFlightTimeNoFlightData() {
-        when(addon.getServer()).thenReturn(server);
-        when(player.getName()).thenReturn("lukeskywlker19");
-        when(addon.getServer().getPlayer(anyString())).thenReturn(player);
-
-        when(flightTimeManager.getPlayerFlightData(player.getUniqueId())).thenReturn(null);
-
-        List<String> args = Arrays.asList("get", player.getName());
-        assertFalse(flightTimeAdminCommand.execute(senderUser, "flighttime", args));
-        verify(senderUser).sendMessage("islandfly.commands.admin.flighttime.no-flight-data");
-    }
-
-    @Test
     public void testGetPlayerFlightTime() {
         when(addon.getServer()).thenReturn(server);
         when(player.getName()).thenReturn("lukeskywlker19");
         when(addon.getServer().getPlayer(anyString())).thenReturn(player);
 
-        when(flightTimeManager.getPlayerFlightData(player.getUniqueId())).thenReturn(new IslandFlyPlayerData(targetUuid.toString(), 69));
+        IslandFlyPlayerData islandFlyPlayerData = new IslandFlyPlayerData(targetUuid.toString(), 69);
+        when(playerDataManager.getPlayerFlightData(any())).thenReturn(islandFlyPlayerData);
 
         List<String> args = Arrays.asList("get", player.getName());
         assertTrue(flightTimeAdminCommand.execute(senderUser, "flighttime", args));
-        verify(senderUser).sendMessage("islandfly.commands.admin.flighttime.flight-time", TextVariables.NUMBER, String.valueOf(69));
+        verify(senderUser).sendMessage("islandfly.commands.admin.flighttime.flight-time", TextVariables.NUMBER, FormatUtil.formatTimeSeconds(69));
     }
 
     @Test

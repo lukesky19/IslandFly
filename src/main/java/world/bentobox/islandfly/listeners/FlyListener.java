@@ -5,70 +5,55 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 
-import org.bukkit.event.player.PlayerToggleFlightEvent;
+import org.jetbrains.annotations.NotNull;
 import world.bentobox.bentobox.api.events.island.IslandEnterEvent;
 import world.bentobox.bentobox.api.events.island.IslandExitEvent;
 import world.bentobox.bentobox.api.localization.TextVariables;
 import world.bentobox.bentobox.api.user.User;
 import world.bentobox.bentobox.database.objects.Island;
 import world.bentobox.islandfly.IslandFlyAddon;
-import world.bentobox.islandfly.managers.FlightCheckManager;
-import world.bentobox.islandfly.managers.FlightTimeManager;
+import world.bentobox.islandfly.database.object.IslandFlyPlayerData;
+import world.bentobox.islandfly.managers.BossBarManager;
+import world.bentobox.islandfly.managers.FlightValidationManager;
+import world.bentobox.islandfly.managers.PlayerDataManager;
 
-import java.util.UUID;
+import java.util.Optional;
 
 /**
- * This class manages players fly ability.
+ * This class listens to a variety of events to check if flight should be enabled or disabled.
  */
 public class FlyListener implements Listener {
-    /**
-     * Addon instance object.
-     */
-    private final IslandFlyAddon islandFlyAddon;
-    /**
-     * Instance of FlightTimeManager
-     */
-    private final FlightTimeManager flightTimeManager;
-    private final FlightCheckManager flightCheckManager;
+    private final @NotNull IslandFlyAddon islandFlyAddon;
+    private final @NotNull PlayerDataManager playerDataManager;
+    private final @NotNull BossBarManager bossBarManager;
+    private final @NotNull FlightValidationManager flightValidationManager;
 
     /**
      * Constructor
-     *
-     * @param islandFlyAddon    Instance of IslandFlyAddon
-     * @param flightTimeManager Instance of FlightTimeManager
+     * @param islandFlyAddon An {@link IslandFlyAddon} instance.
+     * @param playerDataManager A {@link PlayerDataManager} instance.
+     * @param bossBarManager A {@link BossBarManager} instance.
+     * @param flightValidationManager A {@link FlightValidationManager} instance.
      */
     public FlyListener(
-            final IslandFlyAddon islandFlyAddon,
-            final FlightTimeManager flightTimeManager,
-            final FlightCheckManager flightCheckManager) {
+            @NotNull IslandFlyAddon islandFlyAddon,
+            @NotNull PlayerDataManager playerDataManager,
+            @NotNull BossBarManager bossBarManager,
+            @NotNull FlightValidationManager flightValidationManager) {
         this.islandFlyAddon = islandFlyAddon;
-        this.flightTimeManager = flightTimeManager;
-        this.flightCheckManager = flightCheckManager;
+        this.playerDataManager = playerDataManager;
+        this.bossBarManager = bossBarManager;
+        this.flightValidationManager = flightValidationManager;
     }
 
     /**
-     * Event to handle cases of other fly plugins toggling flight
-     * Mostly ensures temporary flight tracking is disabled in such cases.
-     * @param event A PlayerToggleFlightEvent
+     * Listens for when a player enters an island and checks if flight should be automatically enabled.
+     * @param islandEnterEvent An {@link IslandEnterEvent}.
      */
-    @EventHandler
-    public void onFlyToggle(PlayerToggleFlightEvent event) {
-        final Player player = event.getPlayer();
-        final User user = User.getInstance(player);
-        final UUID uuid = user.getUniqueId();
-        final boolean flightStatus = event.isFlying();
-
-        if(!flightStatus) {
-            if(flightTimeManager.isPlayerFlightTimeTracked(uuid)) {
-                flightTimeManager.stopTrackingPlayerFlightTime(player);
-            }
-        }
-    }
-
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
-    public void onEnterIsland(final IslandEnterEvent event) {
-        final User user = User.getInstance(event.getPlayerUUID());
-        final Island island = event.getIsland();
+    public void onEnterIsland(IslandEnterEvent islandEnterEvent) {
+        User user = User.getInstance(islandEnterEvent.getPlayerUUID());
+        Island island = islandEnterEvent.getIsland();
 
         // Wait until player is on the Island
         islandFlyAddon.getServer().getScheduler().runTaskLater(islandFlyAddon.getPlugin(), () -> {
@@ -78,9 +63,13 @@ public class FlyListener implements Listener {
         }, 1L);
     }
 
+    /**
+     * Listens for when a player exits an island and checks if flight should be automatically enabled.
+     * @param islandExitEvent An {@link IslandExitEvent}.
+     */
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
-    public void onExitIsland(final IslandExitEvent event) {
-        final User user = User.getInstance(event.getPlayerUUID());
+    public void onExitIsland(IslandExitEvent islandExitEvent) {
+        User user = User.getInstance(islandExitEvent.getPlayerUUID());
 
         // Wait until player is on the Island
         islandFlyAddon.getServer().getScheduler().runTaskLater(islandFlyAddon.getPlugin(), () -> {
@@ -90,91 +79,187 @@ public class FlyListener implements Listener {
         }, 1L);
     }
 
-    public boolean checkEnableFly(User user, Island island) {
-        if (flightCheckManager.isPlayerAllowedFlight(user.getPlayer())) return false;
+    /**
+     * Checks if flight can be enabled for the user.
+     * @param user The {@link User} to check.
+     * @param island The {@link Island} the user is on.
+     * @return true if flight can be enabled, otherwise false.
+     */
+    public boolean checkEnableFly(@NotNull User user, @NotNull Island island) {
+        // Check if the player already has flight enabled in general
+        if(flightValidationManager.isPlayerFlightEnabled(user.getPlayer())) {
+            return false;
+        }
 
-        if (flightCheckManager.isIslandSpawnIsland(island) && !flightCheckManager.canUserFlySpawn(user)) return false;
+        // Check if the user can fly on the island if it is a spawn island
+        if(flightValidationManager.isIslandSpawnIsland(island) && !flightValidationManager.hasFlySpawnPermission(user)) {
+            return false;
+        }
 
-        if (!flightCheckManager.canUserFlyIslandLevel(island)) return false;
+        // Check if the user can fly on the island based on the island level.
+        if(!flightValidationManager.canFlyIslandLevel(island)) {
+            return false;
+        }
 
-        if (!flightCheckManager.canUserFlyOnIsland(island, user)) return false;
+        // Check if the user can fly on the island due to island settings/flags.
+        if(!flightValidationManager.isFlyAllowed(island, user)) {
+            return false;
+        }
 
-        return flightCheckManager.canUserUseFly(user) || flightCheckManager.canUserUseTempFly(user);
+        // Check if the user has permission to fly or has permission for timed flight with flight time
+        return flightValidationManager.hasFlyPermission(user)
+                || (flightValidationManager.hasTimedFlyPermission(user) && flightValidationManager.hasFlightTime(user));
     }
 
-    public boolean checkRemoveFly(User user) {
-        // Ignore if conditions are met
-        if (flightCheckManager.isUserOp(user)) return false;
+    /**
+     * Checks if flight should be removed for the user.
+     * @param user The {@link User} to check.
+     * @return true if flight should be removed, otherwise false.
+     */
+    public boolean checkRemoveFly(@NotNull User user) {
+        // Ignore users that are op
+        if(flightValidationManager.isUserOp(user)) {
+            return false;
+        }
 
-        if (flightCheckManager.isUserCreativeOrSpectator(user)) return false;
+        // Ignore users in creative or spectator mode
+        if(flightValidationManager.isUserCreativeOrSpectator(user)) {
+            return false;
+        }
 
-        if (flightCheckManager.canUserBypassFly(user)) return false;
+        // Ignore users that have the fly bypass permission
+        if(flightValidationManager.hasFlyBypassPermission(user)) {
+            return false;
+        }
 
-        // Remove fly if conditions are met
-        Island island = flightCheckManager.getIslandUserIsOn(user);
-        if (island == null) return true;
+        // Fly should be removed if the user isn't on an island
+        Optional<Island> optionalIsland = islandFlyAddon.getIslands().getIslandAt(user.getLocation());
+        if(optionalIsland.isEmpty()) return true;
+        Island island = optionalIsland.get();
 
-        if (!flightCheckManager.canUserUseFly(user) && !flightCheckManager.canUserUseTempFly(user)) return true;
+        // Fly should be removed if the island is a spawn island and the user doesn't have the fly spawn permission
+        if(flightValidationManager.isIslandSpawnIsland(island) && !flightValidationManager.hasFlySpawnPermission(user)) {
+            return true;
+        }
 
-        if (flightCheckManager.isIslandSpawnIsland(island) && !flightCheckManager.canUserFlySpawn(user)) return true;
+        // Fly should be removed if the island doesn't meet the minimum island levels to fly.
+        if(!flightValidationManager.canFlyIslandLevel(island)) {
+            return true;
+        }
 
-        if (!flightCheckManager.canUserFlyIslandLevel(island)) return true;
+        // Fly should be removed if the user can't fly on the island due to island settings/flags.
+        if(!flightValidationManager.isFlyAllowed(island, user)) {
+            return true;
+        }
 
-        return !flightCheckManager.canUserFlyOnIsland(island, user);
+        // Fly should be removed if the user doesn't have the fly permission, doesn't have the timed fly permissions, or has no flight time.
+        return !flightValidationManager.hasFlyPermission(user)
+                && (!flightValidationManager.hasTimedFlyPermission(user) || !flightValidationManager.hasFlightTime(user));
     }
 
-    // Only do timeout if in a bentobox gamemode world, otherwise disable immediately.
+    /**
+     * Disable fly with a delay if in a BentoBox managed world, otherwise disable immediately.
+     * @param user The {@link User} to remove fly for.
+     */
     public void removeFly(User user) {
-        if(flightCheckManager.isUserWorldGamemodeWorld(user)) {
-            // Alert player fly will be disabled
-            final int flyTimeout = this.islandFlyAddon.getSettings().getFlyTimeout();
+        if(flightValidationManager.isUserInGameModeWorld(user)) {
+            int flyTimeout = this.islandFlyAddon.getSettings().getFlyTimeout();
 
-            // Else disable fly with a delay
-            if (user.getPlayer().isFlying()) {
+            // Notify the user that their flight will be disabled after the delay
+            if(user.getPlayer().isFlying()) {
                 user.sendMessage("islandfly.fly-outside-alert", TextVariables.NUMBER, String.valueOf(flyTimeout));
             }
 
+            // Queue the disabling of the user's flight
             islandFlyAddon.getServer().getScheduler().runTaskLater(this.islandFlyAddon.getPlugin(), () -> disableFly(user), 20L * flyTimeout);
         } else {
-            // Else disable fly immediately.
+            // Disable fly immediately.
             disableFly(user);
         }
     }
 
     /**
-     * Disable player fly and alert it.
-     *
-     * @param user The BentoBox User to disable flight for.
+     * Disable the user's flight and notify them if they are actively flying.
+     * @param user {@link User} to disable flight for.
      */
-    public void disableFly(final User user) {
-        if (!user.isOnline()) return;
+    public void disableFly(@NotNull User user) {
+        // If the user is no longer online, do nothing
+        if(!user.isOnline()) return;
+        // Get the Player from the User
+        Player player = user.getPlayer();
+        // Get the player's IslandFlyPlayerData
+        IslandFlyPlayerData islandFlyPlayerData = playerDataManager.getPlayerFlightData(player.getUniqueId());
 
-        final Player player = user.getPlayer();
         // If the user is flying, send a message that their flight is being disabled.
-        if (player.isFlying())
+        if(player.isFlying()) {
             user.sendMessage("islandfly.disable-fly");
-
-        // If player is using temporary flight, stop tracking their flight time.
-        if (flightTimeManager.isPlayerFlightTimeTracked(user.getUniqueId())) {
-            flightTimeManager.stopTrackingPlayerFlightTime(player);
         }
+
+        // Disable flight booleans in the player's island fly player data
+        islandFlyPlayerData.setNormalFlight(false);
+        if(islandFlyPlayerData.isTimedFlightEnabled()) {
+            islandFlyPlayerData.setTimedFlight(false);
+
+            // Save flight time if timed flight was enabled
+            playerDataManager.savePlayerData(islandFlyPlayerData);
+        }
+
+        // Remove the boss bar
+        bossBarManager.removeBossBar(player);
 
         // Disable flight
         player.setFlying(false);
         player.setAllowFlight(false);
     }
 
+    /**
+     * Enable the user's flight and notify them of the change.
+     * @param user The {@link User} to enable flight for.
+     * @return true if flight is enabled, or false if not.
+     */
     public boolean enableFlight(User user) {
-        final Player player = user.getPlayer();
+        // Get the Player from the User
+        Player player = user.getPlayer();
+        // Get the player's IslandFlyPlayerData
+        IslandFlyPlayerData islandFlyPlayerData = playerDataManager.getPlayerFlightData(player.getUniqueId());
 
-        if(flightCheckManager.canUserUseFly(user)) {
+        if(flightValidationManager.hasFlyPermission(user)) {
+            // Enable Normal Flight
+            islandFlyPlayerData.setNormalFlight(true);
             player.setAllowFlight(true);
+
+            // Disable timed flight, save player data, and remove the boss bar if timed flight is enabled
+            if(islandFlyPlayerData.isTimedFlightEnabled()) {
+                islandFlyPlayerData.setTimedFlight(false);
+
+                // Save flight time if timed flight was enabled
+                playerDataManager.savePlayerData(islandFlyPlayerData);
+
+                // Remove the boss bar
+                bossBarManager.removeBossBar(player);
+            }
+
+            // Show Boss Bar
+            bossBarManager.addIslandFlyBossBar(player);
+
+            // Notify Player
             user.sendMessage("islandfly.enable-fly");
+
             return true;
-        } else if(flightCheckManager.canUserUseTempFly(user)) {
-            flightTimeManager.trackPlayerFlightTime(player);
+        } else if(flightValidationManager.hasTimedFlyPermission(user) && flightValidationManager.hasFlightTime(user)) {
+            // Disable normal flight
+            islandFlyPlayerData.setNormalFlight(false);
+
+            // Enable Timed Flight
+            islandFlyPlayerData.setTimedFlight(true);
             player.setAllowFlight(true);
+
+            // Show Boss Bar
+            bossBarManager.addFlightTimeBossBar(player);
+
+            // Notify Player
             user.sendMessage("islandfly.enable-fly");
+
             return true;
         }
 

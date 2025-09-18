@@ -13,7 +13,8 @@ import world.bentobox.bentobox.api.commands.CompositeCommand;
 import world.bentobox.bentobox.api.user.User;
 import world.bentobox.islandfly.IslandFlyAddon;
 import world.bentobox.islandfly.database.object.IslandFlyPlayerData;
-import world.bentobox.islandfly.managers.FlightTimeManager;
+import world.bentobox.islandfly.managers.PlayerDataManager;
+import world.bentobox.islandfly.util.FormatUtil;
 
 import java.util.Collections;
 import java.util.UUID;
@@ -35,7 +36,9 @@ public class FlightTimePlayerCommandTest {
     @Mock
     Player player;
     @Mock
-    FlightTimeManager flightTimeManager;
+    PlayerDataManager flightTimeManager;
+    @Mock
+    IslandFlyPlayerData islandFlyPlayerData;
 
     MockedStatic<User> mockedUserClass;
     UUID uuid;
@@ -57,7 +60,7 @@ public class FlightTimePlayerCommandTest {
         mockedUserClass = mockStatic(User.class);
         mockedUserClass.when(() -> User.getInstance(player)).thenReturn(user);
 
-        flightTimePlayerCommand = new FlightTimePlayerCommand(compositeCommand, addon, flightTimeManager);
+        flightTimePlayerCommand = new FlightTimePlayerCommand(compositeCommand, flightTimeManager);
     }
 
     @AfterEach
@@ -75,10 +78,10 @@ public class FlightTimePlayerCommandTest {
     @Test
     public void testExecuteNoFlightTime() {
         when(user.getUniqueId()).thenReturn(uuid);
-        when(flightTimeManager.getPlayerFlightData(user.getUniqueId())).thenReturn(null);
+        when(flightTimeManager.getPlayerFlightData(uuid)).thenReturn(islandFlyPlayerData);
 
         flightTimePlayerCommand.execute(user, "flighttime", Collections.emptyList());
-        verify(user).sendMessage("islandfly.commands.player.flighttime.flight-time", "[number]", "0");
+        verify(user).sendMessage("islandfly.commands.player.flighttime.flight-time", "[number]", FormatUtil.formatTimeSeconds(0));
     }
 
     @Test
@@ -87,7 +90,6 @@ public class FlightTimePlayerCommandTest {
         when(flightTimeManager.getPlayerFlightData(user.getUniqueId())).thenReturn(new IslandFlyPlayerData(uuid.toString(), 5));
 
         flightTimePlayerCommand.execute(user, "flighttime", Collections.emptyList());
-        verify(user).sendMessage("islandfly.commands.player.flighttime.flight-time", "[number]", "5");
+        verify(user).sendMessage("islandfly.commands.player.flighttime.flight-time", "[number]", FormatUtil.formatTimeSeconds(5));
     }
-
 }

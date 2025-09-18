@@ -6,112 +6,114 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
+import org.jetbrains.annotations.NotNull;
 import world.bentobox.bentobox.BentoBox;
 import world.bentobox.bentobox.api.user.User;
 import world.bentobox.bentobox.database.objects.Island;
 import world.bentobox.islandfly.IslandFlyAddon;
 import world.bentobox.islandfly.database.object.IslandFlyPlayerData;
-import world.bentobox.islandfly.managers.FlightTimeManager;
+import world.bentobox.islandfly.managers.BossBarManager;
+import world.bentobox.islandfly.managers.PlayerDataManager;
 
-import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
-
 
 /**
  * This class manages Death and Respawn options.
  */
 public class FlyDeathListener implements Listener {
+    private final @NotNull BentoBox bentoBox;
+	private final @NotNull PlayerDataManager playerDataManager;
+    private final @NotNull BossBarManager bossBarManager;
 
 	/**
-	 * BentoBox plugin instance.
+	 * Constructor
+	 * @param islandFlyAddon An {@link IslandFlyAddon} instance.
 	 */
-    private final BentoBox plugin;
-	/**
-	 * Instance of FlightTimeManager
-	 */
-	final FlightTimeManager flightTimeManager;
-
-
-	/**
-	 * Default constructor.
-	 * @param addon IslandFlyAddon instance
-	 */
-	public FlyDeathListener(final IslandFlyAddon addon, FlightTimeManager flightTimeManager) {
-        this.plugin = addon.getPlugin();
-		this.flightTimeManager = flightTimeManager;
+	public FlyDeathListener(
+            @NotNull IslandFlyAddon islandFlyAddon,
+            @NotNull PlayerDataManager playerDataManager,
+            @NotNull BossBarManager bossBarManager) {
+        this.bentoBox = islandFlyAddon.getPlugin();
+		this.playerDataManager = playerDataManager;
+        this.bossBarManager = bossBarManager;
     }
 
 	/**
-	 * Fired when player died. Removes fly ability in user world, if user does not have flybypass permission.
-	 * @param event Instance of PlayerDeathEvent
+	 * Fired when player died. Removes fly ability in user world, if user does not have the fly bypass permission.
+	 * @param playerDeathEvent A {@link PlayerDeathEvent}.
 	 */
 	@EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
-	public void onDeath(final PlayerDeathEvent event) {
+	public void onDeath(PlayerDeathEvent playerDeathEvent) {
 	    // Get the BentoBox User based on the player from the PlayerDeathEvent.
-	    final User user = User.getInstance(event.getEntity().getUniqueId());
+	    User user = User.getInstance(playerDeathEvent.getEntity().getUniqueId());
+        Player player = user.getPlayer();
 
 		// Check if the player can fly on non-islands.
-	    if(plugin.getIWM().getAddon(user.getWorld()).
+	    if(bentoBox.getIWM().getAddon(user.getWorld()).
 			map(a -> user.hasPermission(a.getPermissionPrefix() + "island.flybypass")).
 			orElse(false)) {
 	    	return;
 		}
 
 		// Disable fly on death
-	    disableFly(user);
+        player.setFlying(false);
 	}
-
 
 	/**
 	 * Enable fly mode if player had it before.
-	 * If the player has both regular island fly and temporary island fly, regular island fly will take priority.
-	 * Otherwise, temporary fly will be enabled if the player still has time left.
+	 * If the player has both regular island fly and timed island fly, regular island fly will take priority.
+	 * Otherwise, timed flight will be enabled if the player still has time left.
 	 * @param event Instance of PlayerRespawnEvent
 	 */
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
 	public void onRespawn(PlayerRespawnEvent event) {
-	    // If a player respawns on an island that he's added to, do nothing.
-	    // Otherwise - disable Fly
-	    final Player player = event.getPlayer();
-	    final UUID playerUUID = player.getUniqueId();
-	    Optional<Island> island = plugin.getIslands().getIslandAt(player.getLocation());
-		final String permPrefix = plugin.getIWM().getPermissionPrefix(player.getWorld());
+	    Player player = event.getPlayer();
+	    UUID uuid = player.getUniqueId();
+	    Optional<Island> optionalIsland = bentoBox.getIslands().getIslandAt(player.getLocation());
+		String permPrefix = bentoBox.getIWM().getPermissionPrefix(player.getWorld());
 
-	    if (island.isPresent() && island.get().getMembers().containsKey(playerUUID)) {
-			// Default to regular island fly if the player has both regular island fly and temporary island fly permissions.
-			if(player.hasPermission(permPrefix + "island.fly")
-					&& player.hasPermission(permPrefix + "island.tempfly")
-					|| player.hasPermission(permPrefix + "island.fly")) {
-				if(player.getAllowFlight()) {
-					player.setFlying(true);
-				}
-			} else if(player.hasPermission(permPrefix + "island.tempfly")) {
-				if(player.getAllowFlight()) {
-					// Checks if the user has no flight data or flight time equal to 0.
-					IslandFlyPlayerData data = flightTimeManager.getPlayerFlightData(player.getUniqueId());
-					if(!Objects.equals(data, null) || data.getTimeSeconds() != 0) {
-						// Enable temp flight if the player has time
-						flightTimeManager.trackPlayerFlightTime(player);
-						player.setFlying(true);
-					}
-				}
-			}
-	    }
+        if(optionalIsland.isEmpty()) return;
+        if(!optionalIsland.get().getMemberSet().contains(uuid)) return;
+
+        // Get the player's IslandFlyPlayerData
+        IslandFlyPlayerData islandFlyPlayerData = playerDataManager.getPlayerFlightData(uuid);
+
+        // Check if fly was enabled at the time of the death
+        if(islandFlyPlayerData.isNormalFlightEnabled()) {
+            if(player.hasPermission(permPrefix + "island.fly")) {
+                player.setFlying(true);
+            } else {
+                // If the player is no longer able to fly, disable the internal flight setting.
+                islandFlyPlayerData.setNormalFlight(false);
+
+                // Remove any boss bar shown
+                bossBarManager.removeBossBar(player);
+            }
+        } else if(islandFlyPlayerData.isTimedFlightEnabled()) {
+            if(player.hasPermission(permPrefix + "island.timedfly")) {
+                if(islandFlyPlayerData.getTimeSeconds() > 0) {
+                    player.setFlying(true);
+                } else {
+                    // If the player is no longer able to fly, disable the internal flight setting.
+                    islandFlyPlayerData.setTimedFlight(false);
+
+                    // Save player flight data.
+                    playerDataManager.savePlayerData(islandFlyPlayerData);
+
+                    // Remove any boss bar shown
+                    bossBarManager.removeBossBar(player);
+                }
+            } else {
+                // If the player is no longer able to fly, disable the internal flight setting.
+                islandFlyPlayerData.setTimedFlight(false);
+
+                // Save player flight data.
+                playerDataManager.savePlayerData(islandFlyPlayerData);
+
+                // Remove any boss bar shown
+                bossBarManager.removeBossBar(player);
+            }
+        }
 	}
-
-
-	/**
-	 * This method disables fly mode for given User.
-	 * @param user Which must lose its fly ability.
-	 */
-	private void disableFly(final User user) {
-		// Stop tracking player flight time.
-		if(flightTimeManager.isPlayerFlightTimeTracked(user.getUniqueId())) {
-			flightTimeManager.stopTrackingPlayerFlightTime(user.getPlayer());
-		}
-
-		// Set player as not flying.
-		user.getPlayer().setFlying(false);
-    }
 }

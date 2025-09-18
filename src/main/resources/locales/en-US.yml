@@ -10,7 +10,7 @@ islandfly:
   outside-protection-range: "&c You are not allowed to do that outside your island protection range"
   flight-time-ended: "&c Your flight time has run out. Disabling fly."
   flight-time-warning: "&c Your flight time is about to run out. &e[number] &cseconds left."
-  enable-tempfly: "&a Your fly mode has been enabled. Remaining time left: &e[number] &aseconds."
+  enable-timedfly: "&a Your fly mode has been enabled. Remaining time left: &e[number] &aseconds."
   no-time-left: "&c You do not have any flight time left."
   not-allowed-fly: "&c You are not allowed to fly on this island"
   flight-time-changed: "&a Your flight time was changed to: &e[number] &aseconds."
@@ -23,7 +23,6 @@ islandfly:
         invalid-command-syntax: "&cYour command has invalid syntax."
         invalid-player: "&cThe username provided is not a valid player."
         invalid-time: "&cThe time provided is not valid."
-        no-flight-data: "&cThat player doesn't have a flight data."
         flight-time: "&aThe player has &e[number] &aseconds in flight time."
         set-success: "&aThe player's flight time was successfully set. Player's flight time is now &e[number] &aseconds."
         add-success: "&aThe player's flight time was successfully added to. Player's flight time is now &e[number] &aseconds."
@@ -32,7 +31,7 @@ islandfly:
     player:
       fly:
         description: "allows you to fly on your island"
-      tempfly:
+      timedfly:
         description: "allows you to fly on your island for a limited amount of time"
       flighttime:
         description: "allows you to view how much flight time you have."

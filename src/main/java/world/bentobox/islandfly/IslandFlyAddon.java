@@ -9,16 +9,18 @@ import world.bentobox.bentobox.managers.RanksManager;
 import world.bentobox.islandfly.commands.FlightTimeAdminCommand;
 import world.bentobox.islandfly.commands.FlightTimePlayerCommand;
 import world.bentobox.islandfly.commands.FlyToggleCommand;
-import world.bentobox.islandfly.commands.TempFlyToggleCommand;
+import world.bentobox.islandfly.commands.TimedFlyToggleCommand;
 import world.bentobox.islandfly.config.Settings;
 import world.bentobox.islandfly.database.object.IslandFlyPlayerData;
 import world.bentobox.islandfly.listeners.*;
-import world.bentobox.islandfly.managers.FlightCheckManager;
-import world.bentobox.islandfly.managers.FlightTimeManager;
+import world.bentobox.islandfly.managers.BossBarManager;
+import world.bentobox.islandfly.managers.FlightValidationManager;
+import world.bentobox.islandfly.managers.PlayerDataManager;
+import world.bentobox.islandfly.managers.TaskManager;
 import world.bentobox.level.Level;
 
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
-
 
 /**
  * IslandFlyAddon main class. Enables addon.
@@ -35,9 +37,11 @@ public class IslandFlyAddon extends Addon {
     private Level levelAddon;
 
     /**
-     * FlightTimeManager instance
+     * PlayerDataManager instance
      */
-    private FlightTimeManager flightTimeManager;
+    private PlayerDataManager playerDataManager;
+    private BossBarManager bossBarManager;
+    private TaskManager taskManager;
 
     /**
      * A flag to allow or disallow flight on island
@@ -88,8 +92,10 @@ public class IslandFlyAddon extends Addon {
     @Override
     public void onEnable() {
         Database<IslandFlyPlayerData> islandFlyPlayerDatabase = new Database<>(this, IslandFlyPlayerData.class);
-        flightTimeManager = new FlightTimeManager(this, islandFlyPlayerDatabase);
-        FlightCheckManager flightCheckManager = new FlightCheckManager(this, islandFlyPlayerDatabase);
+        playerDataManager = new PlayerDataManager(islandFlyPlayerDatabase);
+        bossBarManager = new BossBarManager(playerDataManager);
+        taskManager = new TaskManager(this, playerDataManager, bossBarManager);
+        FlightValidationManager flightValidationManager = new FlightValidationManager(this, playerDataManager);
 
         //Hook into gamemodes
         this.getPlugin().getAddonsManager().getGameModeAddons().forEach(gameModeAddon -> {
@@ -100,14 +106,14 @@ public class IslandFlyAddon extends Addon {
                 AtomicBoolean adminSuccess = new AtomicBoolean(false);
                 gameModeAddon.getPlayerCommand().ifPresent(
                         playerCommand -> {
-                            new FlyToggleCommand(playerCommand, this);
-                            new TempFlyToggleCommand(playerCommand, this, flightTimeManager);
-                            new FlightTimePlayerCommand(playerCommand, this, flightTimeManager);
+                            new FlyToggleCommand(playerCommand, this, playerDataManager, bossBarManager);
+                            new TimedFlyToggleCommand(playerCommand, this, playerDataManager, bossBarManager);
+                            new FlightTimePlayerCommand(playerCommand, playerDataManager);
                             playerSuccess.set(true);
                         });
                 gameModeAddon.getAdminCommand().ifPresent(
                         adminCommand -> {
-                            new FlightTimeAdminCommand(adminCommand, this, flightTimeManager);
+                            new FlightTimeAdminCommand(adminCommand, this, playerDataManager);
                             adminSuccess.set(true);
                         });
                 if(playerSuccess.get() && adminSuccess.get()) hooked = true;
@@ -118,15 +124,18 @@ public class IslandFlyAddon extends Addon {
 
         if(hooked) {
             // Register Listeners
-            this.registerListener(new FlyListener(this, flightTimeManager, flightCheckManager));
-            this.registerListener(new FlyDeathListener(this, flightTimeManager));
-            this.registerListener(new FlyLogoutListener(this, flightTimeManager));
-            this.registerListener(new FlyLoginListener(this, flightTimeManager));
-            this.registerListener(new FlyFlagListener(this, flightTimeManager));
+            this.registerListener(new FlyListener(this, playerDataManager, bossBarManager, flightValidationManager));
+            this.registerListener(new FlyDeathListener(this, playerDataManager, bossBarManager));
+            this.registerListener(new FlyLogoutListener(this, playerDataManager, bossBarManager));
+            this.registerListener(new FlyLoginListener(this, playerDataManager, bossBarManager));
+            this.registerListener(new FlyFlagListener(this, playerDataManager, bossBarManager));
 
             // Register a flag
             this.registerFlag(ISLAND_FLY_PROTECTION);
         }
+
+        taskManager.startFlightTimeTask();
+        taskManager.startSaveTask();
     }
 
     /**
@@ -134,7 +143,22 @@ public class IslandFlyAddon extends Addon {
      */
     @Override
     public void onDisable() {
-        // Nothing to do here
+        if(taskManager != null) {
+            taskManager.stopFlightTimeTask();
+            taskManager.stopSaveTask();
+        }
+
+        if(playerDataManager != null) {
+            this.getServer().getOnlinePlayers().forEach(player -> {
+                UUID uuid = player.getUniqueId();
+
+                playerDataManager.savePlayerData(uuid);
+
+                if(bossBarManager != null) bossBarManager.removeBossBar(player);
+
+                playerDataManager.unloadPlayerData(uuid);
+            });
+        }
     }
 
     /**
